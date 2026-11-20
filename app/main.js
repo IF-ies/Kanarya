@@ -148,12 +148,13 @@ function makeTray() {
   if (!tray) {
     tray = new Tray(img);
     tray.setToolTip('Kanarya');
-    tray.on('click', () => { if (!win) return; if (win.isVisible()) win.hide(); else win.showInactive(); });
+    tray.on('click', () => tray.popUpContextMenu()); // tek tık: menü (en üstte Ayarlar)
+    tray.on('double-click', openSettings);            // çift tık: doğrudan ayarlar
   }
   const l = TL[settings.lang] || TL.tr;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: l.toggle, click: () => { if (win) { if (win.isVisible()) win.hide(); else win.showInactive(); } } },
     { label: l.settings, click: openSettings },
+    { label: l.toggle, click: () => { if (win) { if (win.isVisible()) win.hide(); else win.showInactive(); } } },
     { type: 'separator' },
     { label: l.quit, click: () => app.quit() },
   ]));
