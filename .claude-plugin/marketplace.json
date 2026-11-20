@@ -1,0 +1,12 @@
+{
+  "name": "kanarya",
+  "owner": { "name": "IF-ies" },
+  "plugins": [
+    {
+      "name": "kanarya",
+      "source": "./",
+      "description": "Bağlam kanaryası / Context canary for Claude Code",
+      "version": "0.1.0"
+    }
+  ]
+}

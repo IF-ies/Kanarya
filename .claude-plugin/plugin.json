@@ -1,0 +1,8 @@
+{
+  "name": "kanarya",
+  "version": "0.1.0",
+  "description": "Bağlam kanaryası: Claude bağlamı kaybederse kanarya yaralanır, uydurursa kedi yer. / Context canary: if Claude loses context the canary gets hurt; if it makes things up, the cat eats it.",
+  "author": { "name": "IF-ies" },
+  "license": "MIT",
+  "keywords": ["context", "canary", "hallucination", "hooks", "desktop"]
+}

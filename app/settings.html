@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Kanarya</title>
+<style>
+  :root { --bg: #141218; --card: #1e1b24; --line: #2e2a37; --text: #f2eee6; --muted: #a49cb0; --accent: #ffd43b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  main { padding: 18px 20px 20px; }
+  h1 { font-size: 18px; margin: 0 0 14px; display: flex; gap: 8px; align-items: center; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row small { display: block; color: var(--muted); font-size: 12px; }
+  input[type=number], input[type=text], select { background: #0f0d13; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; }
+  input[type=number] { width: 84px; } input[type=text] { width: 150px; }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+  button { background: var(--accent); color: #1a1500; border: 0; border-radius: 8px; padding: 8px 16px; font: 600 14px "Segoe UI", sans-serif; cursor: pointer; }
+  #ok { color: #9be39b; font-size: 13px; opacity: 0; transition: opacity .3s; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🐤 <span data-t="title"></span></h1>
+  <section>
+    <h2 data-t="general"></h2>
+    <label class="row"><span data-t="lang"></span><select id="lang"><option value="tr">Türkçe</option><option value="en">English</option></select></label>
+    <label class="row"><span><span data-t="every"></span><small data-t="everyHint"></small></span><input id="checkEvery" type="number" min="1" max="50"></label>
+    <label class="row"><span data-t="lives"></span><input id="lives" type="number" min="1" max="9"></label>
+    <label class="row"><span><span data-t="heal"></span><small data-t="healHint"></small></span><input id="healAfter" type="number" min="0" max="50"></label>
+    <label class="row"><span><span data-t="name"></span><small data-t="nameHint"></small></span><input id="canaryName" type="text" maxlength="24"></label>
+  </section>
+  <section>
+    <h2 data-t="death"></h2>
+    <label class="row"><span><span data-t="note"></span><small data-t="noteHint"></small></span><input id="claudeNote" type="checkbox"></label>
+    <label class="row"><span data-t="notif"></span><input id="notification" type="checkbox"></label>
+    <label class="row"><span data-t="sound"></span><input id="sound" type="checkbox"></label>
+  </section>
+  <section>
+    <h2 data-t="window"></h2>
+    <label class="row"><span data-t="corner"></span><select id="corner"></select></label>
+    <label class="row"><span data-t="scale"></span><select id="scale"><option value="0.8">80%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
+    <label class="row"><span data-t="top"></span><input id="alwaysOnTop" type="checkbox"></label>
+    <label class="row"><span data-t="auto"></span><input id="autoStart" type="checkbox"></label>
+    <label class="row"><span><span data-t="ctx"></span><small data-t="ctxHint"></small></span><select id="contextWindow"><option value="200000">200K</option><option value="400000">400K</option><option value="1000000">1M</option></select></label>
+  </section>
+  <div class="actions"><span id="ok"></span><button id="save" data-t="save"></button></div>
+</main>
+<script src="settings.js"></script>
+</body>
+</html>

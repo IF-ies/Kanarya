@@ -1,0 +1,16 @@
+{
+  "name": "kanarya",
+  "version": "0.1.0",
+  "description": "Context canary for Claude Code: a cute 2.5D canary that gets hurt when Claude loses context and gets eaten by a cat when it hallucinates.",
+  "main": "app/main.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron app",
+    "demo": "electron app --demo",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "electron": "45.2.3"
+  }
+}
