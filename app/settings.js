@@ -117,7 +117,7 @@ document.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('clic
   el.value = Math.min(Number(el.max), Math.max(Number(el.min), v));
 }));
 // Pencereyi içeriğe göre boyutla (kaydırma çubuğu olmasın)
-function fit() { window.kanarya.fitSettings && window.kanarya.fitSettings(Math.ceil(document.querySelector('main').getBoundingClientRect().height)); }
+function fit() { window.kanarya.fitSettings && window.kanarya.fitSettings(Math.ceil(document.querySelector('main').scrollHeight)); }
 $('save').addEventListener('click', async () => {
   current = await window.kanarya.saveSettings({
     lang: $('lang').value, theme: $('theme').value,

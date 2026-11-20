@@ -12,7 +12,8 @@
   :root[data-theme=light] .step button:hover { background: #f3ead9; }
   :root[data-theme=light] button#save { color: #fff; }
   * { box-sizing: border-box; }
-  html, body { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+  html, body { height: 100%; overflow: hidden; }
+  main { height: 100vh; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
   ::-webkit-scrollbar { width: 0; height: 0; }
   h1 img { width: 26px; height: 26px; border-radius: 7px; }

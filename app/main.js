@@ -201,6 +201,14 @@ app.whenReady().then(() => {
   if (setShot) { // ayarlar penceresinin görüntüsü (test)
     openSettings();
     setTimeout(async () => {
+      if (process.env.KANARYA_SHOT_WHEEL) {
+        settingsWin.webContents.sendInputEvent({ type: 'mouseMove', x: 200, y: 300 });
+        settingsWin.webContents.sendInputEvent({ type: 'mouseWheel', x: 200, y: 300, deltaX: 0, deltaY: Number(process.env.KANARYA_SHOT_WHEEL), canScroll: true });
+        await new Promise((r) => setTimeout(r, 500));
+        const y = await settingsWin.webContents.executeJavaScript("[document.querySelector('main').scrollTop, document.querySelector('main').scrollHeight, window.innerHeight]");
+        fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `[tekerlek] ${JSON.stringify(y)}
+`);
+      }
       if (process.env.KANARYA_SHOT_JS) { await settingsWin.webContents.executeJavaScript(process.env.KANARYA_SHOT_JS); await new Promise((r) => setTimeout(r, 300)); }
       fs.writeFileSync(setShot, (await settingsWin.webContents.capturePage()).toPNG()); app.quit();
     }, 1500);

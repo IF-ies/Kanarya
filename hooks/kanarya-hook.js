@@ -80,6 +80,16 @@ function launchApp() {
   if (appRunning()) return true;
   const exe = electronPath();
   if (!exe) return false;
+  // Bozuk bir sürüm ekrana hata penceresi açmasın: önce sözdizimini denetle.
+  for (const f of ['app/main.js', 'lib/core.js']) {
+    const chk = spawnSync(process.execPath, ['--check', path.join(ROOT, f)], { encoding: 'utf8' });
+    if (chk.status !== 0) {
+      try { fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `${new Date().toISOString()} [başlatılmadı] ${f}: ${(chk.stderr || '').split('
+').slice(0, 4).join(' | ')}
+`); } catch { /* yok */ }
+      return false;
+    }
+  }
   const child = spawn(exe, [path.join(ROOT, 'app')], { detached: true, stdio: 'ignore', windowsHide: false });
   child.unref();
   return true;
