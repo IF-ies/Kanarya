@@ -60,12 +60,13 @@ The script adds the hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`
 
 ## Use
 
+- **Tray icon** (Windows notification area / macOS menu bar): click to show or hide, right-click for settings and quit
 - **Right-click:** Settings · New egg · Watch the cat attack · Hide · Quit
 - **Double-click:** the canary hops and sings
 - **Top strip:** drag the window (position is remembered)
 - Commands: `/kanarya:ac` (open window), `/kanarya:durum` (status), `/kanarya:kur` (install window)
 
-**Settings:** language (English / Turkish), check frequency, lives, healing, canary name, what happens on death, corner, size, always on top, auto start, context size (200K / 400K / 1M).
+**Settings:** language (English / Turkish), theme (dark / light / system), transparent background, check frequency, lives, healing, canary name, what happens on death, corner, size, always on top, auto start, context size (200K / 400K / 1M).
 
 Data lives in `~/.claude/kanarya/`.
 

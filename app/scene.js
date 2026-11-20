@@ -33,6 +33,17 @@ let seed = Math.random() * 1000;
 
 const SCENES = { egg: 3.4, injured: 1.6, sick: 1.8, death: 7.2, heal: 1.6, ok: 1.5 };
 
+// Tema: koyu / açık / sistem
+const THEMES = {
+  dark: { top: '#2c253a', bot: '#110e17', stroke: 'rgba(255,255,255,0.08)', glow: '255,214,120', chip: 'rgba(0,0,0,0.38)', chipText: '#fff4c8', muted: 'rgba(255,255,255,0.5)', faint: 'rgba(255,255,255,0.4)', box: 'rgba(10,8,14,0.85)', title: '#fff6d6', sub: 'rgba(255,255,255,0.55)', badge: 'rgba(0,0,0,0.55)', badgeStroke: 'rgba(255,255,255,0.10)', track: 'rgba(255,255,255,0.15)', ok: '#bcd0ff', warn: '#ffd27a', bad: '#ff8a8a', accent: '#ffd43b', heart: 'rgba(255,255,255,0.3)', alive: '#fff2c2' },
+  light: { top: '#fffaf0', bot: '#efe5d3', stroke: 'rgba(60,40,10,0.16)', glow: '255,196,80', chip: 'rgba(255,255,255,0.88)', chipText: '#3a2a10', muted: 'rgba(40,30,20,0.62)', faint: 'rgba(40,30,20,0.48)', box: 'rgba(255,253,247,0.94)', title: '#2a1f10', sub: 'rgba(40,30,20,0.62)', badge: 'rgba(255,255,255,0.9)', badgeStroke: 'rgba(60,40,10,0.16)', track: 'rgba(0,0,0,0.12)', ok: '#3b6fd8', warn: '#b7791f', bad: '#d33a3a', accent: '#a87808', heart: 'rgba(60,40,10,0.35)', alive: '#7a5a00' },
+};
+const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function TH() {
+  const t = (model.settings && model.settings.theme) || 'dark';
+  return THEMES[t === 'system' ? (darkMQ && !darkMQ.matches ? 'light' : 'dark') : t] || THEMES.dark;
+}
+
 function L() { return TXT[model.settings.lang] || TXT.tr; }
 function nowS() { return frozen ? frozen.t : performance.now() / 1000; }
 
@@ -71,13 +82,15 @@ function linear(x0, y0, x1, y1, stops) {
 }
 
 // ---------- arka plan ----------
+const clearBg = () => !!(model.settings && model.settings.transparent);
 function drawPanel(danger, ox, oy) {
+  if (clearBg()) return; // şeffaf arka plan: kafes masaüstünde asılı durur
   rrect(8, 6, 224, 288, 24);
-  ctx.fillStyle = linear(0, 6, 0, 294, [[0, '#2c253a'], [1, '#110e17']]);
+  ctx.fillStyle = linear(0, 6, 0, 294, [[0, TH().top], [1, TH().bot]]);
   ctx.fill();
   ctx.save(); ctx.clip();
   // pencereden gelen sıcak ışık (paralaks: en arka katman)
-  ctx.fillStyle = radial(70 + ox, 50 + oy, 4, 70 + ox, 50 + oy, 170, [[0, `rgba(255,214,120,${0.30 - danger * 0.22})`], [1, 'rgba(255,214,120,0)']]);
+  ctx.fillStyle = radial(70 + ox, 50 + oy, 4, 70 + ox, 50 + oy, 170, [[0, `rgba(${TH().glow},${0.30 - danger * 0.22})`], [1, `rgba(${TH().glow},0)`]]);
   ctx.fillRect(0, 0, W, H);
   // tehlike arttıkça karanlık sol alttan yayılır
   if (danger > 0) {
@@ -86,7 +99,7 @@ function drawPanel(danger, ox, oy) {
   }
   ctx.restore();
   rrect(8.5, 6.5, 223, 287, 24);
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = TH().stroke; ctx.lineWidth = 1; ctx.stroke();
 }
 
 // ---------- kafes ----------
@@ -437,7 +450,7 @@ function heart(x, y, s, filled) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
   ctx.beginPath(); ctx.moveTo(0, 3);
   ctx.bezierCurveTo(-7, -2, -4, -8, 0, -4); ctx.bezierCurveTo(4, -8, 7, -2, 0, 3); ctx.closePath();
-  if (filled) { ctx.fillStyle = radial(-2, -4, 0, 0, -1, 7, [[0, '#ff9aa2'], [1, '#d81e3a']]); ctx.fill(); } else { ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke(); }
+  if (filled) { ctx.fillStyle = radial(-2, -4, 0, 0, -1, 7, [[0, '#ff9aa2'], [1, '#d81e3a']]); ctx.fill(); } else { ctx.strokeStyle = TH().heart; ctx.lineWidth = 1; ctx.stroke(); }
   ctx.restore();
 }
 
@@ -460,7 +473,7 @@ function badge(x, y, text, color, align) {
   ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
   const w = ctx.measureText(text).width + 12;
   const bx = align === 'right' ? x - w : x;
-  rrect(bx, y - 11, w, 16, 8); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill();
+  rrect(bx, y - 11, w, 16, 8); ctx.fillStyle = TH().badge; ctx.fill();
   ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.fillText(text, bx + 6, y + 1);
   return w;
 }
@@ -477,21 +490,22 @@ function footer(st) {
   }
   ctx.textAlign = 'center';
   // ad + durum kapsülü
-  let title; let color = '#fff4c8';
-  if (!st) { title = l.wait; color = 'rgba(255,255,255,0.6)'; } else if (st.status === 'dead') { title = l.dead(st.name); color = '#ff8a8a'; } else title = l.alive(st.name, st.mood, (st.contextPct || 0) > 0.8);
+  let title; let color = TH().chipText;
+  if (!st) { title = l.wait; color = TH().muted; } else if (st.status === 'dead') { title = l.dead(st.name); color = TH().bad; } else title = l.alive(st.name, st.mood, (st.contextPct || 0) > 0.8);
   const shown = fitText(title, maxW - 20, 13, '600', 9.5);
   const tw = ctx.measureText(shown).width + 20;
-  rrect(CX - tw / 2, 243, tw, 21, 10.5); ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fill();
+  rrect(CX - tw / 2, 243, tw, 21, 10.5); ctx.fillStyle = TH().chip; ctx.fill();
   ctx.fillStyle = color; ctx.fillText(shown, CX, 258);
   // proje · ajan
   if (st && (st.label || st.agentName)) {
     const line = [st.label, st.agentName].filter(Boolean).join(' · ');
     const t2 = fitText(line, maxW - 16, 10.5, '500', 10.5, 'Consolas, "Cascadia Mono", monospace');
     const w2 = ctx.measureText(t2).width;
+    if (clearBg()) { rrect(CX - w2 / 2 - 14, 266, w2 + 30, 16, 8); ctx.fillStyle = TH().chip; ctx.fill(); ctx.font = '500 10.5px Consolas, "Cascadia Mono", monospace'; }
     agentGlyph(st.agentKind || (st.agentName === 'Codex' ? 'codex' : 'claude'), CX - w2 / 2 - 2, 273.5, 5.5);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillText(t2, CX + 8, 277);
+    ctx.fillStyle = TH().muted; ctx.fillText(t2, CX + 8, 277);
   } else if (!st) {
-    ctx.font = '10px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText(l.waitHint, CX, 277);
+    ctx.font = '10px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = TH().faint; ctx.fillText(l.waitHint, CX, 277);
   }
   // canlar ya da ölü ipucu
   if (st && st.status === 'dead') {
@@ -566,8 +580,8 @@ function summaryCard(list, sl) {
   model = emptyCage.model;
   const x = sl.x + 3; const y = sl.y + 3; const w = sl.w - 6; const h = sl.h - 6;
   rrect(x, y, w, h, 12);
-  ctx.fillStyle = linear(0, y, 0, y + h, [[0, '#2c253a'], [1, '#110e17']]); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = clearBg() ? TH().box : linear(0, y, 0, y + h, [[0, TH().top], [1, TH().bot]]); ctx.fill();
+  ctx.strokeStyle = TH().stroke; ctx.lineWidth = 1; ctx.stroke();
   const st = list.map((c) => c.model.state).filter(Boolean);
   const dead = st.filter((v) => v.status === 'dead').length;
   const maxCtx = Math.round(Math.max(0, ...st.map((v) => v.contextPct || 0)) * 100);
@@ -575,12 +589,12 @@ function summaryCard(list, sl) {
   const rows = [];
   const sh = w < 160 ? l.short : { alive: l.sumAlive, week: l.sumWeek, ctx: l.sumCtx, more: l.sumMore };
   if (list.length > MAX_SHOWN) rows.push(['➕', sh.more(extra), '#ffe9a8']);
-  rows.push(['🐤', sh.alive(st.length - dead), '#fff2c2']);
-  rows.push(['💀', sh.week(emptyCage.model.weeklyDeaths || 0), (emptyCage.model.weeklyDeaths || 0) ? '#ff9b9b' : 'rgba(255,255,255,0.7)']);
-  rows.push(['📈', sh.ctx(maxCtx), maxCtx >= 80 ? '#ff8a8a' : maxCtx >= 60 ? '#ffd27a' : '#bcd0ff']);
+  rows.push(['🐤', sh.alive(st.length - dead), TH().alive]);
+  rows.push(['💀', sh.week(emptyCage.model.weeklyDeaths || 0), (emptyCage.model.weeklyDeaths || 0) ? TH().bad : TH().muted]);
+  rows.push(['📈', sh.ctx(maxCtx), maxCtx >= 80 ? TH().bad : maxCtx >= 60 ? TH().warn : TH().ok]);
   const lineH = 16; const top = y + 10;
   ctx.textAlign = 'left';
-  ctx.font = '700 12px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = '#ffd43b';
+  ctx.font = '700 12px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = TH().accent;
   ctx.fillText('Kanarya', x + 10, top + 10);
   const room = Math.floor((h - 34) / lineH);
   rows.slice(0, Math.max(1, room)).forEach(([ic, txt, col], i) => {
@@ -589,7 +603,7 @@ function summaryCard(list, sl) {
     ctx.fillStyle = col; ctx.fillText(fitText(txt, w - 38, 10.5, '600', 10.5), x + 26, yy);
   });
   if (h > 90) {
-    ctx.font = '9px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = TH().faint;
     ctx.fillText(l.sumHint, x + 10, y + h - 8);
   }
   ctx.textAlign = 'center';
@@ -599,8 +613,9 @@ function summaryCard(list, sl) {
 function agentGlyph(kind, x, y, r) {
   ctx.save(); ctx.translate(x, y);
   if (kind === 'codex') {
-    rrect(-r, -r, 2 * r, 2 * r, r * 0.45); ctx.fillStyle = '#f4f4f4'; ctx.fill();
-    ctx.strokeStyle = '#111'; ctx.lineWidth = r * 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const lightT = TH() === THEMES.light;
+    rrect(-r, -r, 2 * r, 2 * r, r * 0.45); ctx.fillStyle = lightT ? '#1b1b1b' : '#f4f4f4'; ctx.fill();
+    ctx.strokeStyle = lightT ? '#f4f4f4' : '#111'; ctx.lineWidth = r * 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.4); ctx.lineTo(-r * 0.1, 0); ctx.lineTo(-r * 0.5, r * 0.4); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(r * 0.05, r * 0.45); ctx.lineTo(r * 0.55, r * 0.45); ctx.stroke();
   } else {
@@ -621,22 +636,22 @@ function cellLabel(st, s, badgeY = 12) {
   const l = L(); const f = 1 / s; // f: gerçek pikseli kafes birimine çevirir
   const boxH = Math.min(120, 30 * f);
   const top = 294 - boxH;
-  rrect(8, top, 224, boxH, Math.min(18, 8 * f)); ctx.fillStyle = 'rgba(10,8,14,0.85)'; ctx.fill();
+  rrect(8, top, 224, boxH, Math.min(18, 8 * f)); ctx.fillStyle = TH().box; ctx.fill();
   const ty = top + 12 * f; const sy = top + 24.5 * f;
   agentGlyph(st.agentKind || (st.agentName === 'Codex' ? 'codex' : 'claude'), 16 + 5.5 * f, ty - 3.8 * f, 5 * f);
   ctx.textAlign = 'left';
   const title = fitText(st.label || st.name, 216 - 20 - 13 * f, 11 * f, '700', 11 * f);
-  ctx.fillStyle = st.status === 'dead' ? '#ff8a8a' : '#fff6d6'; ctx.fillText(title, 16 + 13 * f, ty);
+  ctx.fillStyle = st.status === 'dead' ? TH().bad : TH().title; ctx.fillText(title, 16 + 13 * f, ty);
   // alt satır: kanarya adı (rengiyle) · ajan
   const n = st.maxLives || 3;
   const heartsW = st.status === 'dead' ? 0 : n * 8.5 * f;
   ctx.font = `600 ${9 * f}px "Segoe UI", system-ui, sans-serif`;
   const nameTxt = st.status === 'dead' ? l.dead(st.name) : st.name;
-  ctx.fillStyle = st.status === 'dead' ? '#ff8a8a' : palette('happy', st.variant || 0).mid;
+  ctx.fillStyle = st.status === 'dead' ? TH().bad : (TH() === THEMES.light ? palette('happy', st.variant || 0).lo : palette('happy', st.variant || 0).mid);
   const nm = fitText(nameTxt, 120, 9 * f, '600', 9 * f);
   ctx.fillText(nm, 16, sy);
   const nw = ctx.measureText(nm).width;
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillStyle = TH().sub;
   ctx.fillText(fitText(` · ${agentShort(st)}`, Math.max(10, 224 - 16 - nw - heartsW - 6), 9 * f, '500', 9 * f), 16 + nw, sy);
   ctx.textAlign = 'center';
   if (st.status !== 'dead') for (let i = 0; i < n; i++) heart(226 - (n - 1 - i) * 8.5 * f - 4 * f, sy - 3 * f, 0.6 * f, i < st.lives);
@@ -648,16 +663,16 @@ function cellLabel(st, s, badgeY = 12) {
 // f: ızgarada küçülen kafeste yazının gerçek boyutta okunur kalması için büyütme.
 function ctxBadge(p, f, y = 12) {
   const pct = Math.round(clamp(p || 0, 0, 1) * 100);
-  const col = pct >= 80 ? '#ff8a8a' : pct >= 60 ? '#ffd27a' : '#bcd0ff';
+  const col = pct >= 80 ? TH().bad : pct >= 60 ? TH().warn : TH().ok;
   const txt = model.settings.lang === 'en' ? `${L().ctx} ${pct}%` : `${L().ctx} %${pct}`;
   ctx.font = `600 ${9.5 * f}px "Segoe UI", system-ui, sans-serif`;
   const pad = 7 * f; const w = ctx.measureText(txt).width + pad * 2; const h = 22 * f;
   const x = 16;
-  rrect(x, y, w, h, 6 * f); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = f; ctx.stroke();
+  rrect(x, y, w, h, 6 * f); ctx.fillStyle = TH().badge; ctx.fill();
+  ctx.strokeStyle = TH().badgeStroke; ctx.lineWidth = f; ctx.stroke();
   ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(txt, x + pad, y + 11 * f);
   const bw = w - pad * 2; const by = y + h - 6 * f;
-  rrect(x + pad, by, bw, 2.4 * f, 1.2 * f); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
+  rrect(x + pad, by, bw, 2.4 * f, 1.2 * f); ctx.fillStyle = TH().track; ctx.fill();
   rrect(x + pad, by, Math.max(2 * f, bw * pct / 100), 2.4 * f, 1.2 * f); ctx.fillStyle = col; ctx.fill();
   ctx.textAlign = 'center';
 }
@@ -961,7 +976,7 @@ if (window.kanarya) {
 }
 
 // Anlık görüntü / test: window.kanaryaFreeze('death', 2.5, 'tr', değişken, kafesSayısı)
-window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
+window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1, theme = 'dark', transparent = false) => {
   const states = {
     happy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.2 },
     sleepy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.85 },
@@ -974,13 +989,13 @@ window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
   const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead', 'happy', 'happy'];
   const agents = [['Claude Code', 'claude'], ['Claude App', 'claude'], ['Codex', 'codex']];
   frozen = { t: 10 };
-  emptyCage.model = { state: null, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
+  emptyCage.model = { state: null, settings: { lang, theme, transparent, onDeath: { sound: false } }, weeklyDeaths: 2 };
   cages = [];
   for (let i = 0; i < count; i++) {
     const v = (variant + i) % 5;
     const key = order[i] in states ? order[i] : (order[i] === 'death' ? 'injured' : 'happy');
     const c = mkCage(`c${i}`);
-    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: agents[i % 3][0], agentKind: agents[i % 3][1], maxLives: 3, ...states[key] }, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
+    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: agents[i % 3][0], agentKind: agents[i % 3][1], maxLives: 3, ...states[key] }, settings: { lang, theme, transparent, onDeath: { sound: false } }, weeklyDeaths: 2 };
     if (i === 0 && SCENES[what]) {
       if (what === 'death') c.model.state = { ...c.model.state, status: 'dead', lives: 0, deathCause: 'hallucination' };
       c.scene = { name: what, start: 10 };

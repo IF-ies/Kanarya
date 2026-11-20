@@ -6,6 +6,11 @@
 <title>Kanarya</title>
 <style>
   :root { --bg: #141218; --card: #1e1b24; --line: #2e2a37; --text: #f2eee6; --muted: #a49cb0; --accent: #ffd43b; color-scheme: dark; }
+  :root[data-theme=light] { --bg: #f6f1e7; --card: #fffdf8; --line: #e6dccb; --text: #2a1f10; --muted: #7a6c58; --accent: #b8860b; color-scheme: light; }
+  :root[data-theme=light] input[type=number], :root[data-theme=light] input[type=text], :root[data-theme=light] select, :root[data-theme=light] .step { background-color: #fff; }
+  :root[data-theme=light] option { background: #fff; color: #2a1f10; }
+  :root[data-theme=light] .step button:hover { background: #f3ead9; }
+  :root[data-theme=light] button#save { color: #fff; }
   * { box-sizing: border-box; }
   html, body { overflow: hidden; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
@@ -57,6 +62,8 @@
   </section>
   <section>
     <h2 data-t="window"></h2>
+    <label class="row"><span data-t="theme"></span><select id="theme"></select></label>
+    <label class="row"><span><span data-t="clear"></span><small data-t="clearHint"></small></span><input id="transparent" type="checkbox"></label>
     <label class="row"><span data-t="corner"></span><select id="corner"></select></label>
     <label class="row"><span data-t="scale"></span><select id="scale"><option value="0.8">80%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
     <label class="row"><span data-t="top"></span><input id="alwaysOnTop" type="checkbox"></label>

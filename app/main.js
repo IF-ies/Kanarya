@@ -10,7 +10,7 @@ process.on('uncaughtException', (e) => {
   } catch { /* yok */ }
   process.exit(1);
 });
-const { app, BrowserWindow, ipcMain, Menu, Notification, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Notification, screen, Tray, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const core = require('../lib/core');
@@ -22,7 +22,7 @@ const snapshot = (args.find((a) => a.startsWith('--snapshot=')) || '').slice(11)
 const demo = args.includes('--demo');
 const setShot = (args.find((a) => a.startsWith('--settings-snapshot=')) || '').slice(20); // ayarlar penceresi görüntüsü (test)
 
-let win = null; let settingsWin = null;
+let win = null; let settingsWin = null; let tray = null;
 let settings = core.loadSettings();
 let lastSig = '';
 const seenEvents = new Set();
@@ -142,6 +142,24 @@ function openSettings() {
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
+// Bildirim alanı (Windows sağ alt / macOS menü çubuğu): tıkla göster-gizle, sağ tık menü.
+function makeTray() {
+  const img = nativeImage.createFromPath(ICON).resize({ width: 16, height: 16, quality: 'best' });
+  if (!tray) {
+    tray = new Tray(img);
+    tray.setToolTip('Kanarya');
+    tray.on('click', () => { if (!win) return; if (win.isVisible()) win.hide(); else win.showInactive(); });
+  }
+  const l = TL[settings.lang] || TL.tr;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: l.toggle, click: () => { if (win) { if (win.isVisible()) win.hide(); else win.showInactive(); } } },
+    { label: l.settings, click: openSettings },
+    { type: 'separator' },
+    { label: l.quit, click: () => app.quit() },
+  ]));
+}
+const TL = { tr: { toggle: 'Göster / gizle', settings: 'Ayarlar…', quit: 'Kanaryayı kapat' }, en: { toggle: 'Show / hide', settings: 'Settings…', quit: 'Close canary' } };
+
 ipcMain.handle('settings:get', () => core.loadSettings());
 ipcMain.on('settings:fit', (_e, h) => {
   if (!settingsWin || !Number.isFinite(h)) return;
@@ -157,6 +175,7 @@ ipcMain.handle('settings:save', (_e, partial) => {
     if (prev.scale !== settings.scale || prev.corner !== settings.corner) win.setBounds(placement());
   }
   lastSig = ''; scan();
+  if (tray) makeTray();
   return settings;
 });
 ipcMain.on('menu', (_e, id) => {
@@ -187,7 +206,7 @@ app.whenReady().then(() => {
   if (snapshot) {
     const [scene, sec, out, variant, count] = snapshot.split(/:(?=[^\\/])/);
     win.webContents.once('did-finish-load', async () => {
-      await win.webContents.executeJavaScript(`window.kanaryaFreeze(${JSON.stringify(scene)}, ${Number(sec) || 0}, ${JSON.stringify(settings.lang)}, ${Number(variant) || 0}, ${Number(count) || 1})`);
+      await win.webContents.executeJavaScript(`window.kanaryaFreeze(${JSON.stringify(scene)}, ${Number(sec) || 0}, ${JSON.stringify(settings.lang)}, ${Number(variant) || 0}, ${Number(count) || 1}, ${JSON.stringify(settings.theme)}, ${!!settings.transparent})`);
       await new Promise((r) => setTimeout(r, 300));
       const img = await win.webContents.capturePage();
       fs.writeFileSync(out, img.toPNG());
@@ -196,6 +215,7 @@ app.whenReady().then(() => {
     return;
   }
   fs.writeFileSync(core.PATHS.pid, String(process.pid));
+  makeTray();
   if (process.env.KANARYA_DEBUG) {
     setTimeout(() => fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'),
       `[debug] ${JSON.stringify(win && win.getBounds())} visible=${win && win.isVisible()} top=${win && win.isAlwaysOnTop()} display=${JSON.stringify(screen.getPrimaryDisplay().workArea)}\n`), 3000);
