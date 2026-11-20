@@ -10,13 +10,14 @@ process.on('uncaughtException', (e) => {
   } catch { /* yok */ }
   process.exit(1);
 });
-const { app, BrowserWindow, ipcMain, Menu, Notification, screen, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Notification, screen, Tray, nativeImage, nativeTheme } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const core = require('../lib/core');
 
 const W = 240; const H = 300; const MARGIN = 12; const MAX = 12;
 const ICON = path.join(__dirname, 'icon.png');
+const ICON_LIGHT = path.join(__dirname, 'icon-light.png');
 const args = process.argv.slice(1);
 const snapshot = (args.find((a) => a.startsWith('--snapshot=')) || '').slice(11); // sahne:saniye:çıktı.png[:değişken[:adet]]
 const demo = args.includes('--demo');
@@ -133,7 +134,7 @@ function scan() {
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 500, height: 660, useContentSize: true, icon: ICON, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true,
+    width: 500, height: 660, minWidth: 420, minHeight: 320, useContentSize: true, icon: ICON, resizable: true, minimizable: false, maximizable: true, autoHideMenuBar: true,
     title: settings.lang === 'en' ? 'Kanarya settings' : 'Kanarya ayarları', backgroundColor: '#141218',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -144,13 +145,16 @@ function openSettings() {
 
 // Bildirim alanı (Windows sağ alt / macOS menü çubuğu): tıkla göster-gizle, sağ tık menü.
 function makeTray() {
-  const img = nativeImage.createFromPath(ICON).resize({ width: 16, height: 16, quality: 'best' });
+  const light = settings.theme === 'light' || (settings.theme === 'system' && !nativeTheme.shouldUseDarkColors);
+  const img = nativeImage.createFromPath(light ? ICON_LIGHT : ICON).resize({ width: 16, height: 16, quality: 'best' });
   if (!tray) {
     tray = new Tray(img);
     tray.setToolTip('Kanarya');
+    nativeTheme.on('updated', () => { if (settings.theme === 'system') makeTray(); });
     tray.on('click', () => tray.popUpContextMenu()); // tek tık: menü (en üstte Ayarlar)
     tray.on('double-click', openSettings);            // çift tık: doğrudan ayarlar
   }
+  tray.setImage(img);
   const l = TL[settings.lang] || TL.tr;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: l.settings, click: openSettings },
@@ -160,6 +164,27 @@ function makeTray() {
   ]));
 }
 const TL = { tr: { toggle: 'Göster / gizle', settings: 'Ayarlar…', quit: 'Kanaryayı kapat' }, en: { toggle: 'Show / hide', settings: 'Settings…', quit: 'Close canary' } };
+
+// Köşeden boyutlandırma (şeffaf pencere kendi kenarından boyutlanamıyor): oran korunur,
+// karşı köşe sabit kalır; bitince ölçek ve konum kaydedilir.
+let rz = null;
+ipcMain.on('resize:start', (_e, corner) => { if (win) rz = { corner, b0: win.getBounds(), s: settings.scale || 1 }; });
+ipcMain.on('resize:move', (_e, dx, dy) => {
+  if (!win || !rz) return;
+  const { b0, corner } = rz;
+  const nw = corner === 'bl' ? b0.width - dx : b0.width + dx;
+  const s = Math.min(2.5, Math.max(0.6, (nw / W + (b0.height + dy) / H) / 2));
+  const w = Math.round(W * s); const h = Math.round(H * s);
+  rz.s = s;
+  win.setBounds({ x: corner === 'bl' ? b0.x + b0.width - w : b0.x, y: b0.y, width: w, height: h });
+  clearTimeout(rz.t); rz.t = setTimeout(saveResize, 300); // bırakma olayı kaçsa da boyut kalıcı olsun
+});
+function saveResize() {
+  if (!win || !rz) return;
+  const [x, y] = win.getPosition();
+  settings = core.saveSettings({ scale: Math.round(rz.s * 100) / 100, position: { x, y } });
+}
+ipcMain.on('resize:end', () => { if (!rz) return; clearTimeout(rz.t); saveResize(); rz = null; });
 
 ipcMain.handle('settings:get', () => core.loadSettings());
 ipcMain.on('settings:fit', (_e, h) => {
@@ -228,6 +253,20 @@ app.whenReady().then(() => {
   }
   fs.writeFileSync(core.PATHS.pid, String(process.pid));
   makeTray();
+  if (process.env.KANARYA_TEST_RESIZE) { // test: sol alt tutamaçtan sürükle
+    setTimeout(async () => {
+      const b = win.getBounds(); const wc = win.webContents;
+      const sx = b.width - 5; const sy = b.height - 5;
+      wc.sendInputEvent({ type: 'mouseMove', x: sx, y: sy });
+      wc.sendInputEvent({ type: 'mouseDown', x: sx, y: sy, globalX: b.x + sx, globalY: b.y + sy, button: 'left', clickCount: 1 });
+      for (let i = 1; i <= 6; i++) { wc.sendInputEvent({ type: 'mouseMove', x: sx - i * 10, y: sy - i * 10, globalX: b.x + sx - i * 10, globalY: b.y + sy - i * 10, button: 'left' }); await new Promise((r) => setTimeout(r, 40)); }
+      wc.sendInputEvent({ type: 'mouseUp', x: sx - 60, y: sy - 60, globalX: b.x + sx - 60, globalY: b.y + sy - 60, button: 'left', clickCount: 1 });
+      await new Promise((r) => setTimeout(r, 400));
+      fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `[boyut] önce ${JSON.stringify(b)} sonra ${JSON.stringify(win.getBounds())} ölçek ${core.loadSettings().scale}
+`);
+      app.quit();
+    }, 2500);
+  }
   if (process.env.KANARYA_DEBUG) {
     setTimeout(() => fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'),
       `[debug] ${JSON.stringify(win && win.getBounds())} visible=${win && win.isVisible()} top=${win && win.isAlwaysOnTop()} display=${JSON.stringify(screen.getPrimaryDisplay().workArea)}\n`), 3000);

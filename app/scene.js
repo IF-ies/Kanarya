@@ -580,6 +580,26 @@ function render() {
     withCage(c, () => { drawCage(t, dt, false); cellLabel(c.model.state, s, compact ? top + 4 : 12); });
     ctx.restore();
   }
+  drawGrips(k);
+}
+
+// Boyutlandırma tutamaçları: alt köşeler, yalnızca fare pencere üzerindeyken.
+const GRIP = 18;
+function gripAt(x, y) {
+  const px = x / window.innerWidth * W; const py = y / window.innerHeight * H;
+  if (py < H - GRIP) return null;
+  if (px < GRIP) return 'bl';
+  if (px > W - GRIP) return 'br';
+  return null;
+}
+function drawGrips(k) {
+  if (!mouse.over && !resizing) return;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.strokeStyle = TH() === THEMES.light ? 'rgba(60,40,10,0.55)' : 'rgba(255,240,200,0.6)';
+  ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  for (const [cx, dir] of [[4, 1], [W - 4, -1]]) {
+    for (const d of [5, 9, 13]) { ctx.beginPath(); ctx.moveTo(cx, H - 4 - d); ctx.lineTo(cx + dir * d, H - 4); ctx.stroke(); }
+  }
 }
 
 // Özet kartı: gerçek piksel biriminde çizilir (yuvanın boyuna göre satır sayısı).
@@ -928,6 +948,24 @@ function cageAt(x, y) {
 }
 function playOn(c, name) { if (c) withCage(c, () => play(name)); kick(); }
 
+let resizing = null;
+cv.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const g = gripAt(e.clientX, e.clientY);
+  if (!g || !window.kanarya) return;
+  e.preventDefault();
+  cv.setPointerCapture(e.pointerId); // imleç pencereden çıksa da sürükleme sürer
+  resizing = { sx: e.screenX, sy: e.screenY };
+  window.kanarya.resizeStart(g);
+});
+cv.addEventListener('pointermove', (e) => {
+  if (resizing) { window.kanarya.resizeMove(e.screenX - resizing.sx, e.screenY - resizing.sy); return; }
+  const g = gripAt(e.clientX, e.clientY);
+  cv.style.cursor = g === 'bl' ? 'nesw-resize' : g === 'br' ? 'nwse-resize' : '';
+});
+const endResize = () => { if (resizing) { resizing = null; window.kanarya.resizeEnd(); kick(); } };
+cv.addEventListener('pointerup', endResize);
+cv.addEventListener('pointercancel', endResize);
 cv.addEventListener('mousemove', (e) => {
   mouse.tx = clamp(e.clientX / window.innerWidth * 2 - 1, -1, 1); mouse.ty = clamp(e.clientY / window.innerHeight * 2 - 1, -1, 1);
   mouse.over = true; kick();
@@ -939,6 +977,7 @@ cv.addEventListener('contextmenu', (e) => {
   window.kanarya && window.kanarya.menu(c ? c.id : null);
 });
 cv.addEventListener('click', (e) => {
+  if (gripAt(e.clientX, e.clientY)) return;
   // Özet kartına tıklayınca menü (ayarlar)
   const sl = slotAt(e.clientX, e.clientY);
   if (sl && sl.kind === 'summary') window.kanarya && window.kanarya.menu(null);

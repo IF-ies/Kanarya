@@ -37,6 +37,7 @@ function paint(lang) {
 function applyTheme(v) {
   const light = v === 'light' || (v === 'system' && window.matchMedia && !window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  const logo = document.querySelector('h1 img'); if (logo) logo.src = light ? 'icon-light.png' : 'icon.png';
 }
 
 async function load() {
@@ -45,6 +46,7 @@ async function load() {
   for (const k of ['lang', 'checkEvery', 'lives', 'healAfter', 'canaryName', 'corner']) $(k).value = current[k];
   $('theme').value = current.theme || 'dark'; applyTheme($('theme').value);
   $('scale').value = String(current.scale);
+  if (!$('scale').value) { $('scale').insertAdjacentHTML('beforeend', `<option value="${current.scale}">${Math.round(current.scale * 100)}%</option>`); $('scale').value = String(current.scale); }
   $('contextWindow').value = String(current.contextWindow);
   if (!$('contextWindow').value) { $('contextWindow').insertAdjacentHTML('beforeend', `<option value="${current.contextWindow}">${current.contextWindow}</option>`); $('contextWindow').value = String(current.contextWindow); }
   $('transparent').checked = !!current.transparent;

@@ -113,3 +113,11 @@ test('bozuk girdi hook\'u çökertmez', () => {
   const out = execFileSync(process.execPath, [HOOK, 'stop'], { input: 'bozuk{', env: { ...process.env, KANARYA_HOME: HOME } });
   assert.strictEqual(out.toString(), '{}', 'Stop her zaman JSON yazar (Codex şartı)');
 });
+
+test('tüm JS dosyaları sözdizimi açısından geçerli', () => {
+  const files = ['lib/core.js', 'hooks/kanarya-hook.js', 'install.js', 'app/main.js', 'app/preload.js', 'app/scene.js', 'app/sound.js', 'app/settings.js'];
+  for (const f of files) {
+    const r = require('child_process').spawnSync(process.execPath, ['--check', path.join(__dirname, '..', f)], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, `${f}: ${r.stderr}`);
+  }
+});

@@ -11,7 +11,7 @@ const { spawnSync } = require('child_process');
 
 const argv = process.argv.slice(2);
 const uninstall = argv.includes('--uninstall');
-const HOOK = path.join(__dirname, 'hooks', 'kanarya-hook.js').replace(/\/g, '/');
+const HOOK = path.join(__dirname, 'hooks', 'kanarya-hook.js').split(path.sep).join('/');
 const EVENTS = { SessionStart: 'session-start', UserPromptSubmit: 'prompt', Stop: 'stop', SessionEnd: 'session-end' };
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
 

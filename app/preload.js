@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('kanarya', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (s) => ipcRenderer.invoke('settings:save', s),
   fitSettings: (h) => ipcRenderer.send('settings:fit', h),
+  resizeStart: (corner) => ipcRenderer.send('resize:start', corner),
+  resizeMove: (dx, dy) => ipcRenderer.send('resize:move', dx, dy),
+  resizeEnd: () => ipcRenderer.send('resize:end'),
 });

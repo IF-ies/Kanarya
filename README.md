@@ -64,6 +64,7 @@ The script adds the hooks to `~/.claude/settings.json` and `~/.codex/hooks.json`
 - **Right-click:** Settings · New egg · Watch the cat attack · Hide · Quit
 - **Double-click:** the canary hops and sings
 - **Top strip:** drag the window (position is remembered)
+- **Bottom corners:** drag to resize (the cage keeps its shape; size is remembered)
 - Commands: `/kanarya:ac` (open window), `/kanarya:durum` (status), `/kanarya:kur` (install window)
 
 **Settings:** language (English / Turkish), theme (dark / light / system), transparent background, check frequency, lives, healing, canary name, what happens on death, corner, size, always on top, auto start, context size (200K / 400K / 1M).
