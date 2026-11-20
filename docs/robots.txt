@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://if-ies.github.io/Kanarya/sitemap.xml
