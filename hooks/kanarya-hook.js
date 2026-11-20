@@ -84,9 +84,8 @@ function launchApp() {
   for (const f of ['app/main.js', 'lib/core.js']) {
     const chk = spawnSync(process.execPath, ['--check', path.join(ROOT, f)], { encoding: 'utf8' });
     if (chk.status !== 0) {
-      try { fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `${new Date().toISOString()} [başlatılmadı] ${f}: ${(chk.stderr || '').split('
-').slice(0, 4).join(' | ')}
-`); } catch { /* yok */ }
+      const why = String(chk.stderr || '').split(/\r?\n/).slice(0, 4).join(' | ');
+      try { fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `${new Date().toISOString()} [başlatılmadı] ${f}: ${why}\n`); } catch { /* yok */ }
       return false;
     }
   }
