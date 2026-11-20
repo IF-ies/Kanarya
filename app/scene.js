@@ -790,7 +790,7 @@ window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
     dead: { mood: 'injured', lives: 0, status: 'dead', contextPct: 0.5, deathCause: 'hallucination' },
   };
   const names = lang === 'en' ? ['Lemon', 'Mango', 'Pip', 'Honey', 'Biscuit', 'Sunny'] : ['Limon', 'Fıstık', 'Pamuk', 'Zerdali', 'Tarçın', 'Bal'];
-  const labels = ['Kanarya projesi', 'Pazaryeri stok eşitlemesi', 'Gazozuna durumu', 'LexiFlow anlam doldurma', 'IF-ies MES sunucu çıkışı', 'COMP 301 Lab 7'];
+  const labels = lang === 'en' ? ['Refactor auth module', 'Fix flaky checkout tests', 'Landing page SEO', 'Migrate API client', 'Release notes 2.1', 'Docs cleanup'] : ['Giriş modülünü düzenle', 'Ödeme testlerini düzelt', 'Tanıtım sayfası SEO', 'API istemcisini taşı', 'Sürüm notları 2.1', 'Belge temizliği'];
   const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead'];
   frozen = { t: 10 };
   cages = [];
