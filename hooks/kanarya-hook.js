@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// Kanarya hook'u. Kullanım: node kanarya-hook.js session-start|prompt|stop|kur|ac
+// Kanarya hook'u (Claude Code + Codex).
+// Kullanım: node kanarya-hook.js session-start|prompt|stop|session-end|kur|ac [--codex]
 // Hook asla Claude Code'u durdurmaz: her hatada sessizce 0 ile çıkar.
 
 const fs = require('fs');
@@ -10,6 +11,7 @@ const core = require('../lib/core');
 
 const ROOT = path.resolve(__dirname, '..');
 const ELECTRON_VERSION = '45.2.3';
+const AGENT = process.argv.includes('--codex') ? 'codex' : 'claude';
 
 const T = {
   tr: {
@@ -89,9 +91,8 @@ function install() {
   const pkg = path.join(core.PATHS.runtime, 'package.json');
   if (!fs.existsSync(pkg)) core.writeJson(pkg, { name: 'kanarya-runtime', private: true });
   console.log(`Electron ${ELECTRON_VERSION} → ${core.PATHS.runtime}`);
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const r = spawnSync(npm, ['install', `electron@${ELECTRON_VERSION}`, '--no-audit', '--no-fund'],
-    { cwd: core.PATHS.runtime, stdio: 'inherit', shell: process.platform === 'win32' });
+  const r = spawnSync(`npm install electron@${ELECTRON_VERSION} --no-audit --no-fund`,
+    { cwd: core.PATHS.runtime, stdio: 'inherit', shell: true });
   if (r.status !== 0) { console.error('npm install başarısız / failed'); process.exit(1); }
   // Bazı npm sürümleri kurulum betiklerini çalıştırmıyor; Electron ikilisini elle indir.
   const eDir = path.join(core.PATHS.runtime, 'node_modules', 'electron');
@@ -107,14 +108,15 @@ function onSessionStart(input, settings) {
   const source = input.source || 'startup';
   const t = T[settings.lang];
   const out = [];
-  if (prev && source === 'resume') {
+  if (prev && (source === 'resume' || source === 'fork')) {
+    prev.ended = false;
     // Kelime transcript'te duruyor; aynı kanarya devam eder.
     if (prev.status === 'dead' && prev.noteForClaude) out.push(t.note(prev.name, prev.deathCause));
     prev.noteForClaude = false;
     core.saveSession(prev);
   } else {
     // Yeni oturum, /clear ya da /compact: kafese yumurta gelir.
-    const state = core.newCanary(id, settings, prev, { cwd: input.cwd });
+    const state = core.newCanary(id, settings, prev, { cwd: input.cwd, agent: AGENT });
     core.saveSession(state);
     out.push(prev && source === 'compact' ? t.renew(state.word) : t.intro(state.word));
   }
@@ -129,7 +131,7 @@ function onPrompt(input, settings) {
   let state = core.loadSession(id);
   if (!state) {
     // Eklenti oturum ortasında kuruldu.
-    state = core.newCanary(id, settings, null, { cwd: input.cwd });
+    state = core.newCanary(id, settings, null, { cwd: input.cwd, agent: AGENT });
     out.push(t.intro(state.word));
   }
   if (state.noteForClaude) {
@@ -138,10 +140,12 @@ function onPrompt(input, settings) {
   }
   if (state.requestEgg) {
     // Kullanıcı pencereden yeni yumurta istedi.
-    state = core.newCanary(id, settings, state, { cwd: input.cwd });
+    state = core.newCanary(id, settings, state, { cwd: input.cwd, agent: AGENT });
     out.push(t.renew(state.word));
   }
+  if (!state.firstPrompt && input.prompt) state.firstPrompt = String(input.prompt).replace(/\s+/g, ' ').trim().slice(0, 60);
   state.prompts += 1;
+  state.ended = false;
   if (state.status === 'alive' && (state.pendingCheck || state.prompts % settings.checkEvery === 0)) {
     state.pendingCheck = true;
     out.push(t.check);
@@ -154,7 +158,13 @@ function onStop(input, settings) {
   const state = core.loadSession(input.session_id);
   if (!state) return;
   let parsed = input.transcript_path ? core.parseTranscript(input.transcript_path) : { text: '', tokens: null };
-  if (parsed.tokens) state.contextPct = Math.min(1, parsed.tokens / settings.contextWindow);
+  if (parsed.tokens) {
+    // Ayardaki bağlamı aşan kullanım 1M bağlamlı model demektir.
+    const win = parsed.window || (parsed.tokens > settings.contextWindow ? Math.max(1000000, parsed.tokens) : settings.contextWindow);
+    state.contextPct = Math.min(1, parsed.tokens / win);
+  }
+  state.ended = false;
+  if (parsed.title) state.title = parsed.title;
   if (state.pendingCheck && state.status === 'alive') {
     let answer = core.extractTag(input.last_assistant_message) ?? core.extractTag(parsed.text);
     if (answer === null && input.transcript_path) {
@@ -171,6 +181,13 @@ function onStop(input, settings) {
   core.saveSession(state);
 }
 
+function onSessionEnd(input) {
+  const state = core.loadSession(input.session_id);
+  if (!state) return;
+  state.ended = true; // pencere bu kanaryayı kaldırır
+  core.saveSession(state);
+}
+
 function main() {
   const cmd = process.argv[2];
   if (cmd === 'kur' || cmd === 'install') return install();
@@ -179,7 +196,8 @@ function main() {
   const settings = core.loadSettings();
   if (cmd === 'session-start') return onSessionStart(input, settings);
   if (cmd === 'prompt') return onPrompt(input, settings);
-  if (cmd === 'stop') return onStop(input, settings);
+  if (cmd === 'stop') { process.stdout.write('{}'); return onStop(input, settings); } // Codex Stop'ta JSON ister
+  if (cmd === 'session-end') return onSessionEnd(input);
   return undefined;
 }
 
@@ -188,4 +206,3 @@ try { main(); } catch (e) {
 }
 process.exitCode = 0;
 
-module.exports = { T };

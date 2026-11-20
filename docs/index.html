@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kanarya — Claude Canary: Context &amp; Hallucination Monitor for Claude Code and Codex</title>
+<meta name="description" content="Kanarya is a free, open-source Claude canary for Claude Code and OpenAI Codex. A cute desktop canary gets hurt when Claude loses context and gets eaten by a cat when Claude hallucinates. Catch context rot before it reaches your code.">
+<meta name="keywords" content="Claude canary, Claude Code canary, context canary, Claude Code plugin, Claude hallucination detector, context rot, context window monitor, Claude Code hooks, Codex hooks, Codex canary, kanarya">
+<link rel="canonical" href="https://if-ies.github.io/Kanarya/">
+<link rel="alternate" hreflang="en" href="https://if-ies.github.io/Kanarya/">
+<link rel="alternate" hreflang="tr" href="https://if-ies.github.io/Kanarya/#tr">
+<meta name="theme-color" content="#1b1722">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kanarya">
+<meta property="og:title" content="Kanarya — the Claude canary that dies when Claude hallucinates">
+<meta property="og:description" content="A context canary for Claude Code: the canary gets hurt when Claude loses context, and a cat eats it when Claude makes things up.">
+<meta property="og:url" content="https://if-ies.github.io/Kanarya/">
+<meta property="og:image" content="https://if-ies.github.io/Kanarya/og.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Kanarya: a canary in a cage, a cat attacking it, and the text Claude canary">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Kanarya — Claude canary for Claude Code">
+<meta name="twitter:description" content="The canary gets hurt when Claude loses context. Hallucinate, and the cat eats it.">
+<meta name="twitter:image" content="https://if-ies.github.io/Kanarya/og.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐤</text></svg>">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Kanarya",
+  "alternateName": ["Claude Canary", "Claude Code Context Canary", "Codex Canary"],
+  "description": "Open-source context canary for Claude Code. Detects context loss and hallucination with a secret-word check and shows the result as an animated canary on your desktop.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Windows, macOS, Linux",
+  "softwareRequirements": "Claude Code, Node.js 18+",
+  "license": "https://opensource.org/licenses/MIT",
+  "url": "https://if-ies.github.io/Kanarya/",
+  "downloadUrl": "https://github.com/IF-ies/Kanarya",
+  "codeRepository": "https://github.com/IF-ies/Kanarya",
+  "image": "https://if-ies.github.io/Kanarya/og.png",
+  "inLanguage": ["en", "tr"],
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Organization", "name": "IF-ies", "url": "https://if-ies.com" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What is a Claude canary?",
+      "acceptedAnswer": { "@type": "Answer", "text": "A Claude canary is a secret word given to Claude at the start of a session and checked later. If Claude can no longer recall it, or invents a different one, its context has degraded. Kanarya automates this in Claude Code and shows the result as an animated canary." } },
+    { "@type": "Question", "name": "Does Kanarya cost extra API calls?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. It uses Claude Code hooks only. Each check adds a few tokens to a normal reply." } },
+    { "@type": "Question", "name": "Does saying 'I don't know' kill the canary?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Answering '?' makes the canary sick but never kills it. Only a made-up word brings the cat." } },
+    { "@type": "Question", "name": "How do I install Kanarya?",
+      "acceptedAnswer": { "@type": "Answer", "text": "In Claude Code run: /plugin marketplace add IF-ies/Kanarya, then /plugin install kanarya@kanarya, then /kanarya:kur. Or clone the repository and run node install.js." } }
+  ]
+}
+</script>
+<style>
+  :root { --bg: #f7f3ea; --card: #fffdf7; --text: #1d1a22; --muted: #5d5668; --line: #e4dccb; --accent: #b8860b; --code: #efe8d8; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15121b; --card: #1e1a26; --text: #f1ece2; --muted: #a79fb3; --line: #2f2939; --accent: #ffd43b; --code: #262030; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 48px 16px 64px; }
+  header h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; margin: 0 0 12px; }
+  header p.lead { font-size: 20px; color: var(--muted); margin: 0 0 22px; max-width: 680px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-block; padding: 10px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--card); }
+  .btn.primary { background: var(--accent); color: #1b1500; border-color: transparent; }
+  .shots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 36px 0; }
+  .shots figure { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+  .shots img { width: 100%; height: auto; border-radius: 16px; background: #1b1722; }
+  @media (max-width: 640px) { .shots { grid-template-columns: repeat(2, 1fr); } }
+  h2 { font-size: 26px; margin: 44px 0 12px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; font-size: 15.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  pre { background: var(--code); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 14.5px; }
+  code { font-family: Consolas, "Cascadia Code", monospace; }
+  blockquote { margin: 18px 0; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--card); border-radius: 0 10px 10px 0; font-weight: 600; }
+  footer { margin-top: 56px; color: var(--muted); font-size: 14px; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Kanarya 🐤<br>the Claude canary for Claude Code &amp; Codex</h1>
+    <p class="lead">A context canary that lives on your desktop. When Claude loses context, the canary gets hurt. When Claude <strong>hallucinates</strong>, a cat comes out of the dark and eats it.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/IF-ies/Kanarya">Get it on GitHub</a>
+      <a class="btn" href="#install">Install</a>
+      <a class="btn" href="#sessions">Many sessions</a>
+      <a class="btn" href="#tr">Türkçe</a>
+    </div>
+  </header>
+
+  <section class="shots" aria-label="Screenshots">
+    <figure><img src="mutlu.png" width="300" height="375" alt="Claude canary alive and singing in its cage"><figcaption>Context healthy</figcaption></figure>
+    <figure><img src="hasta.png" width="300" height="375" alt="Sick canary with cat eyes glowing in the dark"><figcaption>"I don't know": sick</figcaption></figure>
+    <figure><img src="kedi.png" width="300" height="375" alt="A cat attacks the canary after Claude hallucinates"><figcaption>Hallucination: cat attack</figcaption></figure>
+    <figure><img src="oldu.png" width="300" height="375" alt="Empty cage: the canary died, Claude's context was lost"><figcaption>Canary died</figcaption></figure>
+  </section>
+
+  <h2 id="sessions">One window, every session</h2>
+  <p><img src="izgara.png" width="300" height="375" alt="Four canaries in a 2x2 grid, one per Claude Code or Codex session, each labelled with the session title" style="float:right;width:240px;height:auto;margin:0 0 12px 18px;border-radius:16px">Run several Claude Code or Codex sessions at once and each one gets its own canary in its own color, all in one small always-on-top window. Two to four sessions share a 2×2 grid. Every canary is labelled with the session title, so you know at a glance which conversation is drifting. A new session hatches from an egg; a closed one leaves.</p>
+  <div style="clear:both"></div>
+
+  <h2>Why a canary for Claude?</h2>
+  <p>Long Claude Code sessions slowly degrade, a problem often called <em>context rot</em>. Instructions get forgotten, details blur, and the model starts to guess confidently. Miners took canaries underground to warn them before the air turned deadly. Kanarya does the same for your context window. It is a tiny, cheap, always-on check with a face you will not want to let die, so you run <code>/compact</code> or start fresh before bad output reaches your code.</p>
+
+  <h2>How the Claude canary check works</h2>
+  <p>At session start Claude receives a secret word such as <code>TANGERINE-47</code>. Every 4 messages (configurable) Claude is asked to append it as <code>&lt;kanarya&gt;…&lt;/kanarya&gt;</code> without being shown it again. Claude Code hooks grade the reply:</p>
+  <table>
+    <tr><th>Claude's answer</th><th>Meaning</th><th>Canary</th></tr>
+    <tr><td>Exact word</td><td>Context is healthy</td><td>🐤 Sings</td></tr>
+    <tr><td>Half right</td><td>Context is blurry</td><td>🤕 Bandaged, −1 life</td></tr>
+    <tr><td><code>?</code></td><td>Forgot, but honest</td><td>😵 Sick, never dies from this</td></tr>
+    <tr><td>A different word</td><td><strong>Hallucination</strong></td><td>💀 The cat eats it</td></tr>
+  </table>
+  <blockquote>Saying "I don't know" never kills the canary. Making things up does.</blockquote>
+  <p>There are three lives, and the cat creeps closer as they drop. The canary gets sleepy as the context window fills. <code>/compact</code> or a new session hatches a fresh egg. When the canary dies, Kanarya can send Claude a note, show a desktop notification and play a sound; each one can be switched on or off. It makes no extra API calls.</p>
+
+  <h2 id="install">Install</h2>
+  <p>Requires Claude Code and Node.js 18+. As a Claude Code plugin:</p>
+  <pre><code>/plugin marketplace add IF-ies/Kanarya
+/plugin install kanarya@kanarya
+/kanarya:kur</code></pre>
+  <p>Or with the script:</p>
+  <pre><code>git clone https://github.com/IF-ies/Kanarya && cd Kanarya
+node install.js</code></pre>
+
+  <h2>FAQ</h2>
+  <p><strong>What is a Claude canary?</strong> A secret word given to Claude early and checked later. If Claude cannot recall it, or invents another, its context has degraded.</p>
+  <p><strong>Does it cost API calls?</strong> No. It only uses hooks, and each check adds a few tokens.</p>
+  <p><strong>Does it work with OpenAI Codex?</strong> Yes. <code>node install.js</code> adds the same hooks to <code>~/.codex/hooks.json</code>; trust them once with <code>/hooks</code> in Codex.</p>
+  <p><strong>Does it work in the claude.ai chat?</strong> No. It needs hooks, which only Claude Code and Codex have.</p>
+
+  <h2 id="tr" lang="tr">Türkçe: Claude için bağlam kanaryası</h2>
+  <div lang="tr">
+    <p>Kanarya, Claude Code için ücretsiz ve açık kaynaklı bir bağlam kanaryası. Claude bağlamı kaybetmeye başlarsa masaüstündeki kanarya yaralanır. Bir şey uydurursa karanlıktan bir kedi gelir ve kanaryayı yer. 4 mesajda bir gizli kelime kontrol edilir. "Bilmiyorum" demek öldürmez, uydurmak öldürür. Arayüz Türkçe ve İngilizce.</p>
+    <p>Kurulum: <code>/plugin marketplace add IF-ies/Kanarya</code> → <code>/plugin install kanarya@kanarya</code> → <code>/kanarya:kur</code></p>
+  </div>
+
+  <footer>MIT License · Made by <a href="https://if-ies.com">IF-ies</a> · All art drawn in code and all sounds synthesized, so there are no third-party assets.</footer>
+</main>
+</body>
+</html>

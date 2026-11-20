@@ -10,12 +10,12 @@ const RX = 60; const RY = 11; const PERCH_Y = 182; const BIRD_Y = 161;
 const IDLE_FPS = 8;
 
 const TXT = {
-  tr: { alive: (n) => `${n} yaşıyor`, dead: (n) => `${n} öldü`, died: 'KANARYA ÖLDÜ', hall: 'uydurdu — kedi geldi',
-    blur: 'bağlam bulanıklaştı', week: (k) => (k ? `Bu hafta ${k} kanarya öldü` : 'Bu hafta kanarya ölmedi'),
-    hint: '/compact ya da sağ tık → yeni yumurta', wait: 'Claude Code oturumu bekleniyor…', tired: 'bağlam doluyor' },
-  en: { alive: (n) => `${n} is alive`, dead: (n) => `${n} died`, died: 'CANARY DIED', hall: 'made things up — the cat came',
-    blur: 'context got blurry', week: (k) => (k ? `${k} canar${k === 1 ? 'y' : 'ies'} died this week` : 'No canary died this week'),
-    hint: '/compact or right-click → new egg', wait: 'Waiting for a Claude Code session…', tired: 'context filling up' },
+  tr: { alive: (n, m, tired) => `${n} · ${tired ? 'uykulu' : m === 'injured' ? 'yaralı' : m === 'sick' ? 'hasta' : 'yaşıyor'}`,
+    dead: (n) => `${n} · öldü`, died: 'KANARYA ÖLDÜ', hall: 'uydurdu, kedi geldi', blur: 'bağlam bulanıklaştı',
+    hint: '/compact ya da sağ tık → yeni yumurta', wait: 'Oturum bekleniyor', waitHint: 'Claude Code ya da Codex aç', ctx: 'bağlam' },
+  en: { alive: (n, m, tired) => `${n} · ${tired ? 'sleepy' : m === 'injured' ? 'injured' : m === 'sick' ? 'sick' : 'alive'}`,
+    dead: (n) => `${n} · dead`, died: 'CANARY DIED', hall: 'made things up, the cat came', blur: 'context got blurry',
+    hint: '/compact or right-click → new egg', wait: 'Waiting for a session', waitHint: 'Open Claude Code or Codex', ctx: 'context' },
 };
 
 // ---------- durum ----------
@@ -25,7 +25,7 @@ let scene = null;            // { name, start }
 let frozen = null;           // anlık görüntü için sabit zaman
 let mouse = { x: 0, y: 0, tx: 0, ty: 0, over: false };
 let particles = [];
-const seed = Math.random() * 1000;
+let seed = Math.random() * 1000;
 
 const SCENES = { egg: 3.4, injured: 1.6, sick: 1.8, death: 6.6, heal: 1.6, ok: 1.5 };
 
@@ -69,7 +69,7 @@ function linear(x0, y0, x1, y1, stops) {
 // ---------- arka plan ----------
 function drawPanel(danger, ox, oy) {
   rrect(8, 6, 224, 288, 24);
-  ctx.fillStyle = linear(0, 6, 0, 294, [[0, 'rgba(46,38,62,0.93)'], [1, 'rgba(16,13,22,0.95)']]);
+  ctx.fillStyle = linear(0, 6, 0, 294, [[0, '#2c253a'], [1, '#110e17']]);
   ctx.fill();
   ctx.save(); ctx.clip();
   // pencereden gelen sıcak ışık (paralaks: en arka katman)
@@ -182,13 +182,30 @@ function drawPerch(sway) {
 }
 
 // ---------- kanarya ----------
-function palette(mood) {
-  if (mood === 'sick') return { hi: '#f4f3c4', mid: '#d9d57a', lo: '#9c9b45', wing: '#bdb85a', head: '#e2de8c' };
-  return { hi: '#fffbd2', mid: '#ffd93a', lo: '#d08f00', wing: '#efb000', head: '#ffe065' };
+// Gerçek kanarya renkleri: sarı, kırmızı faktör (turuncu), beyaz, yabani yeşil, tarçın.
+const VARIANT_COLORS = [
+  { hi: '#fffbd2', mid: '#ffd93a', lo: '#d08f00', wing: '#efb000', head: '#ffe065', feather: '#ffd84a' },
+  { hi: '#fff0d8', mid: '#ffa53a', lo: '#c25a08', wing: '#e98a1f', head: '#ffb455', feather: '#ffa848' },
+  { hi: '#ffffff', mid: '#f0ece2', lo: '#b7ae9c', wing: '#d6cfbf', head: '#f8f5ee', feather: '#f3efe6' },
+  { hi: '#f6ffd2', mid: '#c8d846', lo: '#6c871b', wing: '#93a832', head: '#d6e45f', feather: '#c8d846' },
+  { hi: '#fbe9d6', mid: '#d9a36d', lo: '#8c572b', wing: '#b87d48', head: '#e3b583', feather: '#d9a36d' },
+];
+function mix(a, b, k) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a); const y = p(b);
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * k).toString(16).padStart(2, '0')).join('')}`;
 }
+function palette(mood, variant = 0) {
+  const base = VARIANT_COLORS[((variant % VARIANT_COLORS.length) + VARIANT_COLORS.length) % VARIANT_COLORS.length];
+  if (mood !== 'sick') return base;
+  const out = {};
+  for (const k of Object.keys(base)) out[k] = mix(base[k], '#a9ad78', 0.45); // hasta: soluk, yeşilimsi
+  return out;
+}
+const variantOf = () => (model.state && Number.isFinite(model.state.variant) ? model.state.variant : 0);
 
 function drawCanary(o) {
-  const p = palette(o.mood);
+  const p = palette(o.mood, o.variant ?? variantOf());
   ctx.save();
   ctx.translate(o.x, o.y); ctx.rotate(o.lean || 0); ctx.scale(o.s, o.s * (o.squash || 1));
   ctx.globalAlpha = o.alpha ?? 1;
@@ -371,7 +388,7 @@ function drawParticles() {
     const a = clamp(1 - p.age / p.life, 0, 1);
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = a;
     if (p.kind === 'feather') {
-      ellipse(0, 0, 5, 1.8); ctx.fillStyle = '#ffd84a'; ctx.fill();
+      ellipse(0, 0, 5, 1.8); ctx.fillStyle = palette('happy', variantOf()).feather; ctx.fill();
       ctx.strokeStyle = 'rgba(150,90,0,0.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(5, 0); ctx.stroke();
     } else {
       ctx.font = p.kind === 'note' ? 'bold 14px "Segoe UI Symbol", sans-serif' : '11px "Segoe UI Symbol", sans-serif';
@@ -390,40 +407,137 @@ function heart(x, y, s, filled) {
   ctx.restore();
 }
 
-function footer(st, t) {
+// Metni genişliğe sığdır: önce küçült, yine sığmazsa sonuna … koy.
+function fitText(text, maxW, size, weight = '600', min = 9, family = '"Segoe UI", system-ui, sans-serif') {
+  let sz = size;
+  for (; sz > min; sz -= 0.5) { ctx.font = `${weight} ${sz}px ${family}`; if (ctx.measureText(text).width <= maxW) return text; }
+  ctx.font = `${weight} ${min}px ${family}`;
+  let t = String(text);
+  while (t.length > 1 && ctx.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
+  return `${t}…`;
+}
+
+function badge(x, y, text, color, align) {
+  ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 12;
+  const bx = align === 'right' ? x - w : x;
+  rrect(bx, y - 11, w, 16, 8); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill();
+  ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.fillText(text, bx + 6, y + 1);
+  return w;
+}
+
+function footer(st) {
   const l = L();
   ctx.textAlign = 'center';
-  let title; let color = '#fff4c8';
-  if (!st) { title = l.wait; color = 'rgba(255,255,255,0.55)'; } else if (st.status === 'dead') { title = l.dead(st.name); color = '#ff8a8a'; } else title = l.alive(st.name);
-  ctx.font = '600 13px "Segoe UI", system-ui, sans-serif';
-  const tw = ctx.measureText(title).width + 22;
-  rrect(CX - tw / 2, 244, tw, 21, 10.5); ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.fill();
-  ctx.fillStyle = color; ctx.fillText(title, CX, 259);
-  if (st) {
-    const n = st.maxLives || 3;
-    for (let i = 0; i < n; i++) heart(CX + (i - (n - 1) / 2) * 17, 276, 1.05, i < (st.status === 'dead' ? 0 : st.lives));
+  const maxW = 196;
+  // üst köşeler: haftalık ölüm (sol), bağlam doluluğu (sağ)
+  const k = model.weeklyDeaths || 0;
+  if (k) badge(18, 22, `💀 ${k}`, 'rgba(255,170,170,0.85)', 'left');
+  if (st && st.status !== 'dead' && (st.contextPct || 0) > 0.005) {
+    const pct = Math.round((st.contextPct || 0) * 100);
+    const col = pct >= 80 ? '#ff8a8a' : pct >= 60 ? '#ffd27a' : 'rgba(200,215,255,0.8)';
+    const w = badge(222, 22, `${l.ctx} ${pct}%`, col, 'right');
+    rrect(222 - w + 6, 25, w - 12, 2.5, 1.2); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
+    rrect(222 - w + 6, 25, Math.max(1.5, (w - 12) * Math.min(1, pct / 100)), 2.5, 1.2); ctx.fillStyle = col; ctx.fill();
   }
-  ctx.font = '10.5px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillText(st && st.status === 'dead' ? l.hint : l.week(model.weeklyDeaths || 0), CX, 291);
-  if (st && st.status !== 'dead' && (st.contextPct || 0) > 0.6) {
-    ctx.font = '9.5px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(180,200,255,0.6)';
-    ctx.textAlign = 'right'; ctx.fillText(`${l.tired} ${Math.round(st.contextPct * 100)}%`, 222, 26);
+  ctx.textAlign = 'center';
+  // ad + durum kapsülü
+  let title; let color = '#fff4c8';
+  if (!st) { title = l.wait; color = 'rgba(255,255,255,0.6)'; } else if (st.status === 'dead') { title = l.dead(st.name); color = '#ff8a8a'; } else title = l.alive(st.name, st.mood, (st.contextPct || 0) > 0.8);
+  const shown = fitText(title, maxW - 20, 13, '600', 9.5);
+  const tw = ctx.measureText(shown).width + 20;
+  rrect(CX - tw / 2, 243, tw, 21, 10.5); ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fill();
+  ctx.fillStyle = color; ctx.fillText(shown, CX, 258);
+  // proje · ajan
+  if (st && (st.label || st.agentName)) {
+    const line = [st.label, st.agentName].filter(Boolean).join(' · ');
+    const t2 = fitText(line, maxW, 10.5, '500', 9, 'Consolas, "Cascadia Mono", monospace');
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillText(t2, CX, 277);
+  } else if (!st) {
+    ctx.font = '10px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText(l.waitHint, CX, 277);
+  }
+  // canlar ya da ölü ipucu
+  if (st && st.status === 'dead') {
+    const h = fitText(l.hint, maxW, 10, '500', 8.5); ctx.fillStyle = 'rgba(255,200,200,0.6)'; ctx.fillText(h, CX, 291);
+  } else if (st) {
+    const n = st.maxLives || 3;
+    for (let i = 0; i < n; i++) heart(CX + (i - (n - 1) / 2) * 15, 289, 0.95, i < st.lives);
   }
 }
 
 // ---------- ana çizim ----------
 let lastT = null;
 
+// Her kafesin kendi durumu, sahnesi ve parçacıkları var; çizerken genel değişkenlere takılır.
+const cageMap = new Map();
+let cages = [];
+const emptyCage = { id: null, model, scene: null, particles: [], lastEventId: null, seed };
+function mkCage(id) { return { id, model: { state: null, settings: model.settings, weeklyDeaths: 0 }, scene: null, particles: [], lastEventId: null, seed: Math.random() * 1000 }; }
+function withCage(c, fn) {
+  model = c.model; scene = c.scene; particles = c.particles; lastEventId = c.lastEventId; seed = c.seed;
+  try { fn(); } finally { c.scene = scene; c.particles = particles; c.lastEventId = lastEventId; }
+}
+function gridOf(n) { const cols = n <= 1 ? 1 : 2; return { cols, rows: Math.max(1, Math.ceil(n / cols)) }; }
+
 function render() {
   const t = nowS();
   const dt = lastT === null ? 0 : clamp(t - lastT, 0, 0.1);
   lastT = t;
+  mouse.x = lerp(mouse.x, mouse.tx, 0.12); mouse.y = lerp(mouse.y, mouse.ty, 0.12);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const k = cv.width / W;
+  const list = cages.length ? cages : [emptyCage];
+  if (list.length === 1) {
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    withCage(list[0], () => drawCage(t, dt, true));
+    return;
+  }
+  // Izgara: aynı pencere boyunda 2 sütun; her hücrede küçültülmüş kafes + okunaklı etiket.
+  const { cols, rows } = gridOf(list.length);
+  const cw = W / cols; const ch = H / rows;
+  const s = Math.min((cw - 4) / 224, (ch - 4) / 288);
+  list.forEach((c, i) => {
+    const x0 = (i % cols) * cw; const y0 = Math.floor(i / cols) * ch;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.translate(x0 + (cw - 224 * s) / 2 - 8 * s, y0 + (ch - 288 * s) / 2 - 6 * s);
+    ctx.scale(s, s);
+    withCage(c, () => { drawCage(t, dt, false); cellLabel(c.model.state, s); });
+  });
+}
+
+// Küçük hücre etiketi: kafes koordinatlarında, ölçeğe göre büyütülmüş yazıyla.
+function cellLabel(st, s) {
+  if (!st) return;
+  const l = L(); const f = 1 / s; // f: gerçek pikseli mantıksal birime çevirir
+  ctx.textAlign = 'center';
+  rrect(8, 236, 224, 58, 18); ctx.fillStyle = 'rgba(10,8,14,0.82)'; ctx.fill();
+  const dot = palette('happy', st.variant || 0).mid;
+  const title = fitText(st.label || st.name, 196, 11.5 * f, '700', 8.5 * f);
+  const tw = ctx.measureText(title).width;
+  ctx.fillStyle = dot; ellipse(CX - tw / 2 - 5.5 * f, 252, 3.2 * f, 3.2 * f); ctx.fill();
+  ctx.fillStyle = st.status === 'dead' ? '#ff8a8a' : '#fff6d6'; ctx.fillText(title, CX + 2 * f, 252 + 4 * f);
+  const sub = st.status === 'dead' ? l.dead(st.name) : l.alive(st.name, st.mood, (st.contextPct || 0) > 0.8);
+  const line = fitText(st.agentName === 'Codex' ? `${sub} · Codex` : sub, 150, 9 * f, '500', 7.5 * f);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText(line, 22, 280 + 2 * f);
+  ctx.textAlign = 'center';
+  if (st.status !== 'dead') {
+    const n = st.maxLives || 3;
+    for (let i = 0; i < n; i++) heart(214 - (n - 1 - i) * 8.5 * f, 277 + 1.5 * f, 0.62 * f, i < st.lives);
+  }
+  const pct = clamp(st.contextPct || 0, 0, 1);
+  if (pct > 0.005 && st.status !== 'dead') {
+    rrect(20, 14, 200, 3 * f, 1.5 * f); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
+    rrect(20, 14, Math.max(3, 200 * pct), 3 * f, 1.5 * f); ctx.fillStyle = pct >= 0.8 ? '#ff8a8a' : pct >= 0.6 ? '#ffd27a' : 'rgba(200,215,255,0.8)'; ctx.fill();
+  }
+}
+
+function drawCage(t, dt, full) {
+  ctx.save();
   const st = model.state;
   const s = scene ? t - scene.start : 0;
   if (scene && s > SCENES[scene.name]) scene = null;
   const name = scene ? scene.name : null;
-
-  mouse.x = lerp(mouse.x, mouse.tx, 0.12); mouse.y = lerp(mouse.y, mouse.ty, 0.12);
   const ox = -mouse.x * 4; const oy = -mouse.y * 3;
 
   const dead = st && st.status === 'dead' && name !== 'egg' && !(name === 'death' && s < 3);
@@ -433,10 +547,6 @@ function render() {
   if (name === 'death') danger = Math.max(danger, ease(seg(s, 0, 1.4)) * 0.95);
   const mood = st ? st.mood : 'happy';
   const fatigue = st ? st.contextPct || 0 : 0;
-
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  const k = cv.width / W; ctx.setTransform(k, 0, 0, k, 0, 0);
 
   let shake = 0;
   if (name === 'death' && s > 2.1 && s < 3.0) shake = (1 - seg(s, 2.1, 3.0)) * 4;
@@ -500,13 +610,13 @@ function render() {
   if (mood === 'injured' && alive && !name) {
     // tabanda dökülmüş tüyler
     ctx.save(); ctx.globalAlpha = 0.85;
-    for (const [fx, r] of [[CX - 24, 0.4], [CX + 12, -0.6], [CX - 6, 1.2]]) { ctx.save(); ctx.translate(fx, BASE_Y - 2); ctx.rotate(r); ellipse(0, 0, 5, 1.6); ctx.fillStyle = '#e8c23d'; ctx.fill(); ctx.restore(); }
+    for (const [fx, r] of [[CX - 24, 0.4], [CX + 12, -0.6], [CX - 6, 1.2]]) { ctx.save(); ctx.translate(fx, BASE_Y - 2); ctx.rotate(r); ellipse(0, 0, 5, 1.6); ctx.fillStyle = palette('happy', variantOf()).feather; ctx.fill(); ctx.restore(); }
     ctx.restore();
   }
   if (name === 'egg') drawEgg(s);
   if (dead || (name === 'death' && s > 4)) {
     ctx.save(); ctx.globalAlpha = name === 'death' ? seg(s, 4, 4.6) : 1;
-    for (const [fx, r] of [[CX - 30, 0.3], [CX - 8, -0.8], [CX + 18, 1.1], [CX + 34, -0.2], [CX + 2, 0.6]]) { ctx.save(); ctx.translate(fx, BASE_Y - 2); ctx.rotate(r); ellipse(0, 0, 5, 1.6); ctx.fillStyle = '#d9b437'; ctx.fill(); ctx.restore(); }
+    for (const [fx, r] of [[CX - 30, 0.3], [CX - 8, -0.8], [CX + 18, 1.1], [CX + 34, -0.2], [CX + 2, 0.6]]) { ctx.save(); ctx.translate(fx, BASE_Y - 2); ctx.rotate(r); ellipse(0, 0, 5, 1.6); ctx.fillStyle = palette('happy', variantOf()).lo; ctx.fill(); ctx.restore(); }
     ctx.restore();
   }
   ctx.restore();
@@ -526,7 +636,8 @@ function render() {
   let shown = st;
   if (st && name === 'egg') shown = { ...st, status: 'alive', lives: st.maxLives };
   else if (st && name === 'death' && s < 3.1) shown = { ...st, status: 'alive', lives: 1 };
-  footer(shown, t);
+  ctx.restore();
+  if (full) footer(shown);
 }
 
 function drawAttack(s, t, ox) {
@@ -599,7 +710,7 @@ function loop() {
   raf = null;
   render();
   if (frozen) return;
-  const busy = scene || particles.length || mouse.over || Math.abs(mouse.x - mouse.tx) > 0.01;
+  const busy = cages.some((c) => c.scene || c.particles.length) || mouse.over || Math.abs(mouse.x - mouse.tx) > 0.01;
   if (busy) raf = requestAnimationFrame(loop);
   else timer = setTimeout(() => { raf = requestAnimationFrame(loop); }, 1000 / (document.hidden ? 1 : IDLE_FPS));
 }
@@ -611,41 +722,66 @@ function resize() {
 window.addEventListener('resize', () => { resize(); kick(); });
 resize();
 
+function cageAt(x, y) {
+  if (cages.length <= 1) return cages[0] || null;
+  const { cols, rows } = gridOf(cages.length);
+  const i = Math.floor(y / (window.innerHeight / rows)) * cols + Math.floor(x / (window.innerWidth / cols));
+  return cages[i] || null;
+}
+function playOn(c, name) { if (c) withCage(c, () => play(name)); kick(); }
+
 cv.addEventListener('mousemove', (e) => {
   mouse.tx = clamp(e.clientX / window.innerWidth * 2 - 1, -1, 1); mouse.ty = clamp(e.clientY / window.innerHeight * 2 - 1, -1, 1);
   mouse.over = true; kick();
 });
 cv.addEventListener('mouseleave', () => { mouse.tx = 0; mouse.ty = 0; mouse.over = false; });
-cv.addEventListener('contextmenu', (e) => { e.preventDefault(); window.kanarya && window.kanarya.menu(); });
-cv.addEventListener('dblclick', () => { if (model.state && model.state.status === 'alive') play('ok'); });
+cv.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const c = cageAt(e.clientX, e.clientY);
+  window.kanarya && window.kanarya.menu(c ? c.id : null);
+});
+cv.addEventListener('dblclick', (e) => {
+  const c = cageAt(e.clientX, e.clientY);
+  if (c && c.model.state && c.model.state.status === 'alive') playOn(c, 'ok');
+});
 
 if (window.kanarya) {
   window.kanarya.onState((p) => {
-    const ev = p.state && p.state.event;
-    const prevStatus = model.state && model.state.status;
-    model = p;
-    if (ev && ev.id !== lastEventId) {
-      if (lastEventId !== null || p.replay) play(ev.type);
-      lastEventId = ev.id;
-    } else if (prevStatus === 'dead' && p.state && p.state.status === 'alive') play('egg');
+    emptyCage.model = { state: null, settings: p.settings, weeklyDeaths: p.weeklyDeaths };
+    const next = [];
+    for (const st of p.sessions || []) {
+      let c = cageMap.get(st.sessionId);
+      if (!c) { c = mkCage(st.sessionId); cageMap.set(st.sessionId, c); }
+      const prevStatus = c.model.state && c.model.state.status;
+      c.model = { state: st, settings: p.settings, weeklyDeaths: p.weeklyDeaths };
+      const ev = st.event;
+      if ((p.fresh || []).includes(st.sessionId)) { c.lastEventId = ev ? ev.id : null; playOn(c, 'egg'); } else if (ev && ev.id !== c.lastEventId) {
+        if (c.lastEventId !== null || p.replay) playOn(c, ev.type);
+        c.lastEventId = ev.id;
+      } else if (prevStatus === 'dead' && st.status === 'alive') playOn(c, 'egg');
+      next.push(c);
+    }
+    for (const id of [...cageMap.keys()]) if (!next.some((c) => c.id === id)) cageMap.delete(id);
+    cages = next;
     kick();
   });
-  window.kanarya.onPlay((name) => play(name));
+  window.kanarya.onPlay((p) => playOn(cageMap.get(p.id) || cages[0], p.scene));
   window.kanarya.onDemo(() => {
+    const c = mkCage('demo'); cages = [c];
     const seq = [['happy', 'ok', 4], ['injured', 'injured', 4], ['sick', 'sick', 4], ['dead', 'death', 8], ['happy', 'egg', 5]];
     let i = 0;
     const lives = { happy: 3, injured: 2, sick: 1, dead: 0 };
-    const next = () => {
+    const step = () => {
       const [m, sc, dur] = seq[i++ % seq.length];
-      model.state = { name: 'Limon', status: m === 'dead' ? 'dead' : 'alive', mood: m === 'dead' ? 'injured' : m, lives: lives[m], maxLives: 3, contextPct: 0.3, deathCause: 'hallucination' };
-      play(sc); setTimeout(next, dur * 1000);
+      c.model = { ...c.model, state: { name: 'Limon', label: 'Demo', agentName: 'Claude', status: m === 'dead' ? 'dead' : 'alive', mood: m === 'dead' ? 'injured' : m, lives: lives[m], maxLives: 3, contextPct: 0.3, deathCause: 'hallucination' } };
+      playOn(c, sc); setTimeout(step, dur * 1000);
     };
-    next();
+    step();
   });
 }
 
-// Anlık görüntü / test: window.kanaryaFreeze('death', 2.5, 'tr')
-window.kanaryaFreeze = (what, sec, lang) => {
+// Anlık görüntü / test: window.kanaryaFreeze('death', 2.5, 'tr', değişken, kafesSayısı)
+window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
   const states = {
     happy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.2 },
     sleepy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.85 },
@@ -653,17 +789,25 @@ window.kanaryaFreeze = (what, sec, lang) => {
     sick: { mood: 'sick', lives: 1, status: 'alive', contextPct: 0.5 },
     dead: { mood: 'injured', lives: 0, status: 'dead', contextPct: 0.5, deathCause: 'hallucination' },
   };
-  const base = states[what] || (what === 'death' ? states.injured : states.happy);
-  model = { state: { name: lang === 'en' ? 'Lemon' : 'Limon', maxLives: 3, ...base }, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
+  const names = lang === 'en' ? ['Lemon', 'Mango', 'Pip', 'Honey', 'Biscuit', 'Sunny'] : ['Limon', 'Fıstık', 'Pamuk', 'Zerdali', 'Tarçın', 'Bal'];
+  const labels = ['Kanarya projesi', 'Pazaryeri stok eşitlemesi', 'Gazozuna durumu', 'LexiFlow anlam doldurma', 'IF-ies MES sunucu çıkışı', 'COMP 301 Lab 7'];
+  const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead'];
   frozen = { t: 10 };
-  particles = [];
-  if (SCENES[what]) {
-    if (what === 'death') model.state = { ...model.state, status: 'dead', lives: 0, deathCause: 'hallucination' };
-    scene = { name: what, start: 10 };
-    // parçacıkları o ana kadar simüle et
-    lastT = null;
-    for (let tt = 0; tt <= sec; tt += 1 / 60) { frozen.t = 10 + tt; render(); }
-  } else { frozen.t = 10 + sec; render(); }
+  cages = [];
+  for (let i = 0; i < count; i++) {
+    const v = (variant + i) % 5;
+    const key = order[i] in states ? order[i] : (order[i] === 'death' ? 'injured' : 'happy');
+    const c = mkCage(`c${i}`);
+    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: i === 3 ? 'Codex' : 'Claude', maxLives: 3, ...states[key] }, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
+    if (i === 0 && SCENES[what]) {
+      if (what === 'death') c.model.state = { ...c.model.state, status: 'dead', lives: 0, deathCause: 'hallucination' };
+      c.scene = { name: what, start: 10 };
+    }
+    cages.push(c);
+  }
+  lastT = null;
+  // parçacıkları o ana kadar simüle et
+  for (let tt = 0; tt <= sec; tt += 1 / 60) { frozen.t = 10 + tt; render(); }
   return true;
 };
 

@@ -13,7 +13,8 @@ const HOOK = path.join(__dirname, '..', 'hooks', 'kanarya-hook.js');
 
 function hook(evt, input) {
   const out = execFileSync(process.execPath, [HOOK, evt], { input: JSON.stringify(input), env: { ...process.env, KANARYA_HOME: HOME } }).toString();
-  return out ? JSON.parse(out).hookSpecificOutput.additionalContext : '';
+  const o = out ? JSON.parse(out) : {};
+  return (o.hookSpecificOutput && o.hookSpecificOutput.additionalContext) || '';
 }
 
 function transcript(file, prompt, reply) {
@@ -110,5 +111,5 @@ test('yeni yumurta isteği ve ayarlar', () => {
 
 test('bozuk girdi hook\'u çökertmez', () => {
   const out = execFileSync(process.execPath, [HOOK, 'stop'], { input: 'bozuk{', env: { ...process.env, KANARYA_HOME: HOME } });
-  assert.strictEqual(out.toString(), '');
+  assert.strictEqual(out.toString(), '{}', 'Stop her zaman JSON yazar (Codex şartı)');
 });
