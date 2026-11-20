@@ -434,11 +434,7 @@ function footer(st) {
   const k = model.weeklyDeaths || 0;
   if (k) badge(18, 22, `💀 ${k}`, 'rgba(255,170,170,0.85)', 'left');
   if (st && st.status !== 'dead' && (st.contextPct || 0) > 0.005) {
-    const pct = Math.round((st.contextPct || 0) * 100);
-    const col = pct >= 80 ? '#ff8a8a' : pct >= 60 ? '#ffd27a' : 'rgba(200,215,255,0.8)';
-    const w = badge(222, 22, `${l.ctx} ${pct}%`, col, 'right');
-    rrect(222 - w + 6, 25, w - 12, 2.5, 1.2); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
-    rrect(222 - w + 6, 25, Math.max(1.5, (w - 12) * Math.min(1, pct / 100)), 2.5, 1.2); ctx.fillStyle = col; ctx.fill();
+    ctxBadge(st.contextPct, 1);
   }
   ctx.textAlign = 'center';
   // ad + durum kapsülü
@@ -526,10 +522,25 @@ function cellLabel(st, s) {
     for (let i = 0; i < n; i++) heart(214 - (n - 1 - i) * 8.5 * f, 277 + 1.5 * f, 0.62 * f, i < st.lives);
   }
   const pct = clamp(st.contextPct || 0, 0, 1);
-  if (pct > 0.005 && st.status !== 'dead') {
-    rrect(20, 14, 200, 3 * f, 1.5 * f); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
-    rrect(20, 14, Math.max(3, 200 * pct), 3 * f, 1.5 * f); ctx.fillStyle = pct >= 0.8 ? '#ff8a8a' : pct >= 0.6 ? '#ffd27a' : 'rgba(200,215,255,0.8)'; ctx.fill();
-  }
+  if (pct > 0.005 && st.status !== 'dead') ctxBadge(pct, f);
+}
+
+// Bağlam doluluğu: yazılı rozet ("bağlam 42%") + rozetin içinde altta doluluk çubuğu.
+// f: ızgarada küçülen kafeste yazının gerçek boyutta okunur kalması için büyütme.
+function ctxBadge(p, f) {
+  const pct = Math.round(clamp(p || 0, 0, 1) * 100);
+  const col = pct >= 80 ? '#ff8a8a' : pct >= 60 ? '#ffd27a' : '#bcd0ff';
+  const txt = `${L().ctx} %${pct}`;
+  ctx.font = `600 ${9.5 * f}px "Segoe UI", system-ui, sans-serif`;
+  const pad = 7 * f; const w = ctx.measureText(txt).width + pad * 2; const h = 22 * f;
+  const x = 224 - w; const y = 12;
+  rrect(x, y, w, h, 6 * f); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = f; ctx.stroke();
+  ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(txt, x + pad, y + 11 * f);
+  const bw = w - pad * 2; const by = y + h - 6 * f;
+  rrect(x + pad, by, bw, 2.4 * f, 1.2 * f); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
+  rrect(x + pad, by, Math.max(2 * f, bw * pct / 100), 2.4 * f, 1.2 * f); ctx.fillStyle = col; ctx.fill();
+  ctx.textAlign = 'center';
 }
 
 function drawCage(t, dt, full) {
