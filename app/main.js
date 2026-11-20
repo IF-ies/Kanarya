@@ -200,14 +200,17 @@ app.whenReady().then(() => {
   core.ensureDirs();
   if (setShot) { // ayarlar penceresinin görüntüsü (test)
     openSettings();
-    setTimeout(async () => { fs.writeFileSync(setShot, (await settingsWin.webContents.capturePage()).toPNG()); app.quit(); }, 1500);
+    setTimeout(async () => {
+      if (process.env.KANARYA_SHOT_JS) { await settingsWin.webContents.executeJavaScript(process.env.KANARYA_SHOT_JS); await new Promise((r) => setTimeout(r, 300)); }
+      fs.writeFileSync(setShot, (await settingsWin.webContents.capturePage()).toPNG()); app.quit();
+    }, 1500);
     return;
   }
   createWindow();
   if (snapshot) {
     const [scene, sec, out, variant, count] = snapshot.split(/:(?=[^\\/])/);
     win.webContents.once('did-finish-load', async () => {
-      await win.webContents.executeJavaScript(`window.kanaryaFreeze(${JSON.stringify(scene)}, ${Number(sec) || 0}, ${JSON.stringify(settings.lang)}, ${Number(variant) || 0}, ${Number(count) || 1}, ${JSON.stringify(settings.theme)}, ${!!settings.transparent})`);
+      await win.webContents.executeJavaScript(`window.kanaryaFreeze(${JSON.stringify(scene)}, ${Number(sec) || 0}, ${JSON.stringify(settings.lang)}, ${Number(variant) || 0}, ${Number(count) || 1}, ${JSON.stringify(settings.theme)}, ${!!settings.transparent}, ${Number(settings.backdrop ?? 40)})`);
       await new Promise((r) => setTimeout(r, 300));
       const img = await win.webContents.capturePage();
       fs.writeFileSync(out, img.toPNG());

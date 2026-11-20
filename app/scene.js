@@ -84,7 +84,15 @@ function linear(x0, y0, x1, y1, stops) {
 // ---------- arka plan ----------
 const clearBg = () => !!(model.settings && model.settings.transparent);
 function drawPanel(danger, ox, oy) {
-  if (clearBg()) return; // şeffaf arka plan: kafes masaüstünde asılı durur
+  if (clearBg()) { // şeffaf arka plan: yalnızca ayarlanabilir koyulukta yarı saydam bir zemin
+    const a = Math.min(0.9, Math.max(0, (model.settings.backdrop ?? 40) / 100));
+    if (a > 0) {
+      rrect(8, 6, 224, 288, 24);
+      ctx.fillStyle = TH() === THEMES.light ? `rgba(255,252,245,${a})` : `rgba(14,11,20,${a})`; ctx.fill();
+      ctx.strokeStyle = TH().stroke; ctx.lineWidth = 1; ctx.stroke();
+    }
+    return;
+  }
   rrect(8, 6, 224, 288, 24);
   ctx.fillStyle = linear(0, 6, 0, 294, [[0, TH().top], [1, TH().bot]]);
   ctx.fill();
@@ -976,7 +984,7 @@ if (window.kanarya) {
 }
 
 // Anlık görüntü / test: window.kanaryaFreeze('death', 2.5, 'tr', değişken, kafesSayısı)
-window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1, theme = 'dark', transparent = false) => {
+window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1, theme = 'dark', transparent = false, backdrop = 40) => {
   const states = {
     happy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.2 },
     sleepy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.85 },
@@ -989,13 +997,13 @@ window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1, theme = 'dark',
   const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead', 'happy', 'happy'];
   const agents = [['Claude Code', 'claude'], ['Claude App', 'claude'], ['Codex', 'codex']];
   frozen = { t: 10 };
-  emptyCage.model = { state: null, settings: { lang, theme, transparent, onDeath: { sound: false } }, weeklyDeaths: 2 };
+  emptyCage.model = { state: null, settings: { lang, theme, transparent, backdrop, onDeath: { sound: false } }, weeklyDeaths: 2 };
   cages = [];
   for (let i = 0; i < count; i++) {
     const v = (variant + i) % 5;
     const key = order[i] in states ? order[i] : (order[i] === 'death' ? 'injured' : 'happy');
     const c = mkCage(`c${i}`);
-    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: agents[i % 3][0], agentKind: agents[i % 3][1], maxLives: 3, ...states[key] }, settings: { lang, theme, transparent, onDeath: { sound: false } }, weeklyDeaths: 2 };
+    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: agents[i % 3][0], agentKind: agents[i % 3][1], maxLives: 3, ...states[key] }, settings: { lang, theme, transparent, backdrop, onDeath: { sound: false } }, weeklyDeaths: 2 };
     if (i === 0 && SCENES[what]) {
       if (what === 'death') c.model.state = { ...c.model.state, status: 'dead', lives: 0, deathCause: 'hallucination' };
       c.scene = { name: what, start: 10 };

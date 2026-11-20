@@ -12,7 +12,7 @@
   :root[data-theme=light] .step button:hover { background: #f3ead9; }
   :root[data-theme=light] button#save { color: #fff; }
   * { box-sizing: border-box; }
-  html, body { overflow: hidden; }
+  html, body { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
   ::-webkit-scrollbar { width: 0; height: 0; }
   h1 img { width: 26px; height: 26px; border-radius: 7px; }
@@ -27,6 +27,28 @@
   .step input[type=number] { border: 0; border-radius: 0; width: 44px; text-align: center; padding: 6px 0; background: transparent; box-shadow: none; }
   .step button { background: transparent; color: var(--accent); width: 30px; height: 32px; padding: 0; border-radius: 0; font: 600 17px "Segoe UI", sans-serif; }
   .step button:hover { background: #2a2533; }
+  .range { display: inline-flex; align-items: center; gap: 10px; }
+  .range input { width: 140px; accent-color: var(--accent); }
+  .range output { width: 36px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #backdropRow.off { opacity: .4; pointer-events: none; }
+  /* temaya uygun açılır liste */
+  .dd { position: relative; display: inline-block; }
+  .dd select { display: none; }
+  .dd-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 130px; background: #0f0d13; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font: 400 14px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+  .dd-btn svg { color: var(--accent); flex-shrink: 0; transition: transform .15s; }
+  .dd-btn:hover { border-color: #4a4358; }
+  .dd-btn:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,212,59,.15); }
+  .dd.open .dd-btn svg { transform: rotate(180deg); }
+  .dd-list { display: none; position: absolute; right: 0; top: calc(100% + 4px); min-width: 100%; z-index: 10; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+  .dd.up .dd-list { top: auto; bottom: calc(100% + 4px); }
+  .dd.open .dd-list { display: block; }
+  .dd-item { padding: 6px 10px; border-radius: 6px; white-space: nowrap; cursor: pointer; }
+  .dd-item:hover { background: rgba(255,212,59,.12); }
+  .dd-item.sel { color: var(--accent); font-weight: 600; }
+  .dd-item.sel::after { content: " ✓"; }
+  :root[data-theme=light] .dd-btn { background: #fff; }
+  :root[data-theme=light] .dd-list { box-shadow: 0 12px 30px rgba(60,40,10,.18); }
+  :root[data-theme=light] .dd-item:hover { background: rgba(184,134,11,.12); }
   main { padding: 14px 18px 16px; }
   h1 { font-size: 18px; margin: 0 0 10px; display: flex; gap: 8px; align-items: center; }
   section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; margin-bottom: 10px; }
@@ -64,6 +86,7 @@
     <h2 data-t="window"></h2>
     <label class="row"><span data-t="theme"></span><select id="theme"></select></label>
     <label class="row"><span><span data-t="clear"></span><small data-t="clearHint"></small></span><input id="transparent" type="checkbox"></label>
+    <label class="row" id="backdropRow"><span data-t="backdrop"></span><span class="range"><input id="backdrop" type="range" min="0" max="90" step="5"><output id="backdropVal"></output></span></label>
     <label class="row"><span data-t="corner"></span><select id="corner"></select></label>
     <label class="row"><span data-t="scale"></span><select id="scale"><option value="0.8">80%</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label>
     <label class="row"><span data-t="top"></span><input id="alwaysOnTop" type="checkbox"></label>
