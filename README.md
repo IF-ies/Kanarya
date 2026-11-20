@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="Kanarya logo"></p>
+
 # Kanarya 🐤 — Context Canary for Claude Code & Codex
 
 **A Claude canary that tells you when Claude Code (or OpenAI Codex) loses context or starts hallucinating.**

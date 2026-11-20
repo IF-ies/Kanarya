@@ -61,7 +61,7 @@ window.Sfx = (() => {
     o.connect(g).connect(c.destination); o.start(t); lfo.start(t); o.stop(t + 0.4); lfo.stop(t + 0.4);
   }
 
-  function death() { hiss(1.3, 0.8); squawk(2.15); meow(2.6); }
+  function death() { hiss(1.8, 0.7); squawk(2.8); meow(4.0); }
 
   return { chirp, hiss, meow, squawk, death };
 })();

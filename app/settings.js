@@ -40,7 +40,13 @@ async function load() {
   for (const k of ['claudeNote', 'notification', 'sound']) $(k).checked = !!current.onDeath[k];
 }
 
-$('lang').addEventListener('change', (e) => paint(e.target.value));
+$('lang').addEventListener('change', (e) => { paint(e.target.value); fit(); });
+document.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
+  const el = $(b.dataset.step); const v = Number(el.value || 0) + Number(b.dataset.d);
+  el.value = Math.min(Number(el.max), Math.max(Number(el.min), v));
+}));
+// Pencereyi içeriğe göre boyutla (kaydırma çubuğu olmasın)
+function fit() { window.kanarya.fitSettings && window.kanarya.fitSettings(Math.ceil(document.querySelector('main').getBoundingClientRect().height)); }
 $('save').addEventListener('click', async () => {
   current = await window.kanarya.saveSettings({
     lang: $('lang').value,
@@ -53,4 +59,4 @@ $('save').addEventListener('click', async () => {
   const ok = $('ok'); ok.textContent = (S[current.lang] || S.tr).saved; ok.style.opacity = 1;
   setTimeout(() => { ok.style.opacity = 0; }, 1600);
 });
-load();
+load().then(fit);

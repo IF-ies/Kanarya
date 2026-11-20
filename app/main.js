@@ -16,9 +16,11 @@ const path = require('path');
 const core = require('../lib/core');
 
 const W = 240; const H = 300; const MARGIN = 12; const MAX = 6;
+const ICON = path.join(__dirname, 'icon.png');
 const args = process.argv.slice(1);
 const snapshot = (args.find((a) => a.startsWith('--snapshot=')) || '').slice(11); // sahne:saniye:çıktı.png[:değişken[:adet]]
 const demo = args.includes('--demo');
+const setShot = (args.find((a) => a.startsWith('--settings-snapshot=')) || '').slice(20); // ayarlar penceresi görüntüsü (test)
 
 let win = null; let settingsWin = null;
 let settings = core.loadSettings();
@@ -40,9 +42,9 @@ function label(s) {
   return s.title || s.firstPrompt || folder(s.cwd) || s.sessionId.slice(0, 8);
 }
 
-if (!snapshot && !app.requestSingleInstanceLock()) app.quit();
+if (!snapshot && !setShot && !app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('Kanarya');
-if (snapshot) app.setPath('userData', path.join(require('os').tmpdir(), 'kanarya-snapshot'));
+if (snapshot || setShot) app.setPath('userData', path.join(require('os').tmpdir(), 'kanarya-snapshot'));
 app.on('second-instance', () => { if (win) win.showInactive(); });
 
 function placement() {
@@ -62,7 +64,7 @@ function createWindow() {
     ...placement(),
     transparent: true, frame: false, resizable: false, maximizable: false, fullscreenable: false,
     skipTaskbar: !snapshot, hasShadow: false, alwaysOnTop: settings.alwaysOnTop, show: false,
-    backgroundColor: '#00000000', title: 'Kanarya',
+    backgroundColor: '#00000000', title: 'Kanarya', icon: ICON,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), autoplayPolicy: 'no-user-gesture-required', backgroundThrottling: true },
   });
   if (settings.alwaysOnTop) win.setAlwaysOnTop(true, 'floating');
@@ -88,6 +90,25 @@ function scan() {
   settings = core.loadSettings();
   // Kapanan ya da 24 saattir sessiz oturumlar gösterilmez; doğuş sırasına göre dizilir (yerler oynamasın).
   const sessions = core.liveSessions().sort((a, b) => (a.born || 0) - (b.born || 0)).slice(0, MAX);
+  // Aynı renkte ya da aynı adda iki kanarya olmasın (eski oturumlar renk bilgisi olmadan doğmuş olabilir).
+  const usedV = new Set(); const usedN = new Set();
+  for (const s of sessions) {
+    let changed = false;
+    if (!Number.isInteger(s.variant) || usedV.has(s.variant)) {
+      const v = [...Array(core.VARIANTS).keys()].find((x) => !usedV.has(x));
+      if (v !== undefined) { s.variant = v; changed = true; }
+    }
+    usedV.add(s.variant);
+    if (usedN.has(s.name) && !settings.canaryName) {
+      const n = (core.NAMES[settings.lang] || core.NAMES.tr).find((x) => !usedN.has(x));
+      if (n) { s.name = n; changed = true; }
+    }
+    usedN.add(s.name);
+    if (changed) {
+      const cur = core.loadSession(s.sessionId);
+      if (cur) { cur.variant = s.variant; cur.name = s.name; core.saveSession(cur); }
+    }
+  }
   const fresh = [];
   for (const s of sessions) {
     if (!known.has(s.sessionId)) { known.add(s.sessionId); if (!firstScan) fresh.push(s.sessionId); }
@@ -95,7 +116,7 @@ function scan() {
       seenEvents.add(s.event.id);
       if (!firstScan && s.event.type === 'death' && settings.onDeath.notification && Notification.isSupported()) {
         const l = L[settings.lang];
-        new Notification({ title: l.dead(s.name, label(s)), body: l.deadBody(agentName(s.agent)), silent: !settings.onDeath.sound }).show();
+        new Notification({ title: l.dead(s.name, label(s)), body: l.deadBody(agentName(s.agent)), silent: !settings.onDeath.sound, icon: ICON }).show();
       }
     }
   }
@@ -111,7 +132,7 @@ function scan() {
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 440, height: 660, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true,
+    width: 500, height: 660, useContentSize: true, icon: ICON, resizable: false, minimizable: false, maximizable: false, autoHideMenuBar: true,
     title: settings.lang === 'en' ? 'Kanarya settings' : 'Kanarya ayarları', backgroundColor: '#141218',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -121,6 +142,11 @@ function openSettings() {
 }
 
 ipcMain.handle('settings:get', () => core.loadSettings());
+ipcMain.on('settings:fit', (_e, h) => {
+  if (!settingsWin || !Number.isFinite(h)) return;
+  const max = screen.getPrimaryDisplay().workArea.height - 40;
+  settingsWin.setContentSize(500, Math.min(Math.ceil(h), max));
+});
 ipcMain.handle('settings:save', (_e, partial) => {
   const prev = settings;
   if (partial.corner && partial.corner !== prev.corner) partial.position = null;
@@ -151,6 +177,11 @@ ipcMain.on('menu', (_e, id) => {
 
 app.whenReady().then(() => {
   core.ensureDirs();
+  if (setShot) { // ayarlar penceresinin görüntüsü (test)
+    openSettings();
+    setTimeout(async () => { fs.writeFileSync(setShot, (await settingsWin.webContents.capturePage()).toPNG()); app.quit(); }, 1500);
+    return;
+  }
   createWindow();
   if (snapshot) {
     const [scene, sec, out, variant, count] = snapshot.split(/:(?=[^\\/])/);

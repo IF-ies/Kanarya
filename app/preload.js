@@ -8,5 +8,5 @@ contextBridge.exposeInMainWorld('kanarya', {
   menu: (id) => ipcRenderer.send('menu', id || null),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (s) => ipcRenderer.invoke('settings:save', s),
-  getSession: () => ipcRenderer.invoke('session:get'),
+  fitSettings: (h) => ipcRenderer.send('settings:fit', h),
 });

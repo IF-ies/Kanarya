@@ -12,10 +12,12 @@ const IDLE_FPS = 8;
 const TXT = {
   tr: { alive: (n, m, tired) => `${n} · ${tired ? 'uykulu' : m === 'injured' ? 'yaralı' : m === 'sick' ? 'hasta' : 'yaşıyor'}`,
     dead: (n) => `${n} · öldü`, died: 'KANARYA ÖLDÜ', hall: 'uydurdu, kedi geldi', blur: 'bağlam bulanıklaştı',
-    hint: '/compact ya da sağ tık → yeni yumurta', wait: 'Oturum bekleniyor', waitHint: 'Claude Code ya da Codex aç', ctx: 'bağlam' },
+    hint: '/compact ya da sağ tık → yeni yumurta', wait: 'Oturum bekleniyor', waitHint: 'Claude Code ya da Codex aç', ctx: 'bağlam',
+    sumAlive: (n) => `${n} kanarya yaşıyor`, sumWeek: (k) => `bu hafta ${k} ölüm`, sumCtx: (p) => `en dolu bağlam %${p}`, sumHint: 'tıkla: ayarlar' },
   en: { alive: (n, m, tired) => `${n} · ${tired ? 'sleepy' : m === 'injured' ? 'injured' : m === 'sick' ? 'sick' : 'alive'}`,
     dead: (n) => `${n} · dead`, died: 'CANARY DIED', hall: 'made things up, the cat came', blur: 'context got blurry',
-    hint: '/compact or right-click → new egg', wait: 'Waiting for a session', waitHint: 'Open Claude Code or Codex', ctx: 'context' },
+    hint: '/compact or right-click → new egg', wait: 'Waiting for a session', waitHint: 'Open Claude Code or Codex', ctx: 'context',
+    sumAlive: (n) => `${n} canar${n === 1 ? 'y' : 'ies'} alive`, sumWeek: (k) => `${k} death${k === 1 ? '' : 's'} this week`, sumCtx: (p) => `fullest context ${p}%`, sumHint: 'click: settings' },
 };
 
 // ---------- durum ----------
@@ -27,7 +29,7 @@ let mouse = { x: 0, y: 0, tx: 0, ty: 0, over: false };
 let particles = [];
 let seed = Math.random() * 1000;
 
-const SCENES = { egg: 3.4, injured: 1.6, sick: 1.8, death: 6.6, heal: 1.6, ok: 1.5 };
+const SCENES = { egg: 3.4, injured: 1.6, sick: 1.8, death: 7.2, heal: 1.6, ok: 1.5 };
 
 function L() { return TXT[model.settings.lang] || TXT.tr; }
 function nowS() { return frozen ? frozen.t : performance.now() / 1000; }
@@ -280,67 +282,97 @@ function birdShadow(x, s, a = 0.35) {
 }
 
 // ---------- kedi ----------
+// o: { x, y, s, t, rot, stretch, mouth, reach, alpha, walk (adım fazı), wiggle, tongue, holding, noseFeather, pupil, tailUp }
 function drawCat(o) {
   ctx.save();
   ctx.translate(o.x, o.y); ctx.scale(o.s, o.s); ctx.rotate(o.rot || 0);
   ctx.globalAlpha = o.alpha ?? 1;
-  const fur = '#17131f';
-  const rim = 'rgba(160,150,215,0.55)';
+  const fur = '#17131f'; const fur2 = '#2e2839';
+  const rim = 'rgba(170,160,225,0.6)';
   const stretch = o.stretch || 1;
-  // kuyruk
-  ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-34 * stretch, 0);
-  ctx.bezierCurveTo(-58 * stretch, -4, -62 * stretch, -32 + Math.sin(o.t * 6) * 4, -48 * stretch, -44);
+  const reach = o.reach || 0;
+  const wig = o.wiggle || 0;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // kuyruk (yukarıda kıvrık = keyifli, alçakta seğiren = av modu)
+  const tw = Math.sin(o.t * (o.tailUp ? 3 : 9)) * (o.tailUp ? 4 : 6);
+  ctx.beginPath(); ctx.moveTo(-34 * stretch + wig, -2);
+  if (o.tailUp) ctx.bezierCurveTo(-52 * stretch, -12, -50 * stretch + tw, -48, -36 * stretch + tw, -54);
+  else ctx.bezierCurveTo(-58 * stretch + wig, -2, -64 * stretch, -26 + tw, -50 * stretch, -36 + tw);
   ctx.strokeStyle = fur; ctx.lineWidth = 7; ctx.stroke();
   ctx.strokeStyle = rim; ctx.lineWidth = 1; ctx.stroke();
-  // arka bacak
-  ellipse(-26 * stretch, 8, 12, 10, -0.3); ctx.fillStyle = fur; ctx.fill();
-  // gövde
-  ellipse(-4, 2, 36 * stretch, 15 / Math.sqrt(stretch));
-  ctx.fillStyle = radial(-10, -10, 2, -4, 2, 40 * stretch, [[0, '#2c2638'], [1, fur]]); ctx.fill();
-  ctx.strokeStyle = rim; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.ellipse(-4, 2, 36 * stretch, 15 / Math.sqrt(stretch), 0, Math.PI * 1.1, Math.PI * 1.85); ctx.stroke();
-  // ön patiler + pençeler
-  const reach = o.reach || 0;
-  ctx.fillStyle = fur;
-  for (const [px, py] of [[22 + reach * 14, 13 - reach * 10], [30 + reach * 18, 12 - reach * 6]]) {
-    ellipse(px, py, 7, 4.5, -0.2 - reach * 0.4); ctx.fill();
-    if (reach > 0.2) {
-      ctx.strokeStyle = '#eee'; ctx.lineWidth = 0.9;
-      for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(px + 6, py + k * 2); ctx.lineTo(px + 9, py + k * 2 + 1.5); ctx.stroke(); }
+  // bacaklar: yürürken adım atar, atlarken öne/arkaya uzanır
+  const legs = [[-26, 0, true], [-16, Math.PI, true], [16, Math.PI * 0.5, false], [25, Math.PI * 1.5, false]];
+  for (const [lx, ph, back] of legs) {
+    const hip = back ? lx * stretch + wig : lx * stretch;
+    let fx; let fy;
+    if (reach > 0.2) { fx = hip + (back ? -16 : 22) * reach; fy = back ? 16 : 6 - reach * 8; } else {
+      const w = o.walk === undefined ? 0 : o.walk;
+      fx = hip + Math.sin(w + ph) * 6; fy = 20 - Math.max(0, Math.cos(w + ph)) * 4;
+    }
+    ctx.beginPath(); ctx.moveTo(hip, 6); ctx.lineTo(fx, fy);
+    ctx.strokeStyle = fur; ctx.lineWidth = 7; ctx.stroke();
+    ellipse(fx + 1.5, fy + 1, 5, 3); ctx.fillStyle = fur; ctx.fill();
+    if (!back && reach > 0.2) {
+      ctx.strokeStyle = '#f2f2f2'; ctx.lineWidth = 1;
+      for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(fx + 5, fy + k * 2); ctx.lineTo(fx + 9, fy + k * 2.5 + 2); ctx.stroke(); }
     }
   }
+  // gövde (popo sallanınca arkası oynar)
+  ctx.beginPath();
+  ctx.ellipse(-4 + wig * 0.5, 0, 36 * stretch, 15 / Math.sqrt(stretch), 0, 0, Math.PI * 2);
+  ctx.fillStyle = radial(-12, -12, 2, -4, 0, 42 * stretch, [[0, fur2], [1, fur]]); ctx.fill();
+  ctx.strokeStyle = rim; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.ellipse(-4 + wig * 0.5, 0, 36 * stretch, 15 / Math.sqrt(stretch), 0, Math.PI * 1.08, Math.PI * 1.88); ctx.stroke();
   // kafa
-  const hx = 30; const hy = -10;
-  // geriye yatık kulaklar
+  const hx = 30 + reach * 4; const hy = -10 - reach * 2;
   ctx.fillStyle = fur;
-  ctx.beginPath(); ctx.moveTo(hx - 8, hy - 11); ctx.lineTo(hx - 24, hy - 17); ctx.lineTo(hx - 4, hy - 2); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(hx + 2, hy - 14); ctx.lineTo(hx - 12, hy - 23); ctx.lineTo(hx + 7, hy - 6); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx - 8, hy - 11); ctx.lineTo(hx - 25, hy - 16); ctx.lineTo(hx - 4, hy - 2); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx + 2, hy - 14); ctx.lineTo(hx - 12, hy - 24); ctx.lineTo(hx + 7, hy - 6); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#5a2b3c';
-  ctx.beginPath(); ctx.moveTo(hx - 9, hy - 10); ctx.lineTo(hx - 19, hy - 15); ctx.lineTo(hx - 6, hy - 5); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx - 9, hy - 10); ctx.lineTo(hx - 20, hy - 14); ctx.lineTo(hx - 6, hy - 5); ctx.closePath(); ctx.fill();
   ellipse(hx, hy, 17, 15);
-  ctx.fillStyle = radial(hx - 6, hy - 8, 1, hx, hy, 19, [[0, '#2e2839'], [1, fur]]); ctx.fill();
+  ctx.fillStyle = radial(hx - 6, hy - 8, 1, hx, hy, 19, [[0, fur2], [1, fur]]); ctx.fill();
   ctx.strokeStyle = rim; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.ellipse(hx, hy, 17, 15, 0, Math.PI * 1.05, Math.PI * 1.7); ctx.stroke();
-  // gözler: parlayan sarı, yarık göz bebeği, öfkeli kaş
+  // gözler: parlayan sarı; göz bebeği av anında büyür, keyifliyken kapanır
+  const happy = o.tongue > 0;
   for (const [ex, ey] of [[hx + 3, hy - 4], [hx + 12, hy - 3]]) {
-    ctx.fillStyle = radial(ex, ey, 0, ex, ey, 11, [[0, 'rgba(255,215,60,0.5)'], [1, 'rgba(255,215,60,0)']]);
-    ctx.fillRect(ex - 11, ey - 11, 22, 22);
-    ellipse(ex, ey, 4.2, 3.2); ctx.fillStyle = '#ffd43b'; ctx.fill();
-    ellipse(ex + 0.6, ey, 0.9, 2.9); ctx.fillStyle = '#000'; ctx.fill();
+    ctx.fillStyle = radial(ex, ey, 0, ex, ey, 12, [[0, 'rgba(255,215,60,0.55)'], [1, 'rgba(255,215,60,0)']]);
+    ctx.fillRect(ex - 12, ey - 12, 24, 24);
+    if (happy) {
+      ctx.beginPath(); ctx.arc(ex, ey + 1, 3.6, Math.PI * 1.1, Math.PI * 1.9); ctx.strokeStyle = '#ffd43b'; ctx.lineWidth = 1.8; ctx.stroke();
+      continue;
+    }
+    ellipse(ex, ey, 4.4, 3.3); ctx.fillStyle = '#ffd43b'; ctx.fill();
+    ellipse(ex + 0.6, ey, 0.9 + (o.pupil || 0) * 2.4, 2.9); ctx.fillStyle = '#000'; ctx.fill();
+    ctx.fillStyle = '#fff'; ellipse(ex - 1.4, ey - 1.2, 0.8, 0.8); ctx.fill();
     ctx.fillStyle = fur;
-    ctx.beginPath(); ctx.moveTo(ex - 5, ey - 5); ctx.lineTo(ex + 5, ey - 1.5); ctx.lineTo(ex + 5, ey - 5); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(ex - 5, ey - 5.5); ctx.lineTo(ex + 5, ey - 1.6); ctx.lineTo(ex + 5, ey - 5.5); ctx.closePath(); ctx.fill();
   }
-  // burun + ağız + dişler
-  ctx.fillStyle = '#3a2430'; ellipse(hx + 15, hy + 2, 1.6, 1.1); ctx.fill();
+  // burun, ağız, dişler, dil
+  ctx.fillStyle = '#4a2a38'; ellipse(hx + 15, hy + 2, 1.7, 1.2); ctx.fill();
   const m = o.mouth || 0;
-  ctx.beginPath(); ctx.moveTo(hx + 6, hy + 5); ctx.quadraticCurveTo(hx + 12, hy + 7 + m * 9, hx + 17, hy + 5); ctx.closePath();
+  ctx.beginPath(); ctx.moveTo(hx + 5, hy + 5); ctx.quadraticCurveTo(hx + 12, hy + 7 + m * 10, hx + 18, hy + 5); ctx.closePath();
   ctx.fillStyle = m > 0.05 ? '#6e0f1c' : fur; ctx.fill();
-  ctx.fillStyle = '#f4f4f4';
-  for (const fx of [hx + 8.5, hx + 14.5]) { ctx.beginPath(); ctx.moveTo(fx - 1.4, hy + 5.2); ctx.lineTo(fx, hy + 9 + m * 2); ctx.lineTo(fx + 1.4, hy + 5.2); ctx.fill(); }
+  if (m > 0.05) {
+    ctx.fillStyle = '#f6f6f6';
+    for (const fx of [hx + 8, hx + 15]) { ctx.beginPath(); ctx.moveTo(fx - 1.5, hy + 5.2); ctx.lineTo(fx, hy + 9.5 + m * 2.5); ctx.lineTo(fx + 1.5, hy + 5.2); ctx.fill(); }
+  }
+  if (o.holding) { // ağızdan sarkan kanarya kuyruğu
+    ctx.fillStyle = palette('happy', variantOf()).wing;
+    ctx.beginPath(); ctx.moveTo(hx + 16, hy + 6); ctx.lineTo(hx + 27, hy + 13 + Math.sin(o.t * 20) * 1.5); ctx.lineTo(hx + 24, hy + 16); ctx.lineTo(hx + 13, hy + 8); ctx.closePath(); ctx.fill();
+  }
+  if (o.tongue > 0) {
+    ctx.fillStyle = '#e46a86';
+    ellipse(hx + 15 + o.tongue * 2, hy + 6.5, 3 * o.tongue, 2); ctx.fill();
+  }
   // bıyık
-  ctx.strokeStyle = 'rgba(220,220,235,0.45)'; ctx.lineWidth = 0.6;
-  for (const k of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(hx + 15, hy + 3); ctx.lineTo(hx + 30, hy + 1 + k * 4); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(225,225,240,0.5)'; ctx.lineWidth = 0.6;
+  for (const k of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(hx + 15, hy + 3); ctx.lineTo(hx + 31, hy + 1 + k * 4); ctx.stroke(); }
+  if (o.noseFeather) { // burnuna yapışmış tüy
+    ctx.save(); ctx.translate(hx + 17, hy - 1); ctx.rotate(-0.6 + Math.sin(o.t * 4) * 0.15);
+    ellipse(0, -4, 1.8, 5); ctx.fillStyle = palette('happy', variantOf()).feather; ctx.fill(); ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -432,7 +464,7 @@ function footer(st) {
   const maxW = 196;
   // üst köşeler: haftalık ölüm (sol), bağlam doluluğu (sağ)
   const k = model.weeklyDeaths || 0;
-  if (k) badge(18, 22, `💀 ${k}`, 'rgba(255,170,170,0.85)', 'left');
+  if (k) badge(222, 22, `💀 ${k}`, 'rgba(255,170,170,0.85)', 'right');
   if (st && st.status !== 'dead' && (st.contextPct || 0) > 0.005) {
     ctxBadge(st.contextPct, 1);
   }
@@ -500,6 +532,42 @@ function render() {
     ctx.scale(s, s);
     withCage(c, () => { drawCage(t, dt, false); cellLabel(c.model.state, s); });
   });
+  // Tek sayıda oturumda boş kalan hücre: özet kartı.
+  if (list.length % 2 === 1) {
+    const i = list.length;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.translate((i % cols) * cw + (cw - 224 * s) / 2 - 8 * s, Math.floor(i / cols) * ch + (ch - 288 * s) / 2 - 6 * s);
+    ctx.scale(s, s);
+    summaryCard(list, 1 / s);
+  }
+}
+
+function summaryCard(list, f) {
+  const l = L();
+  model = emptyCage.model;
+  rrect(8, 6, 224, 288, 24);
+  ctx.fillStyle = linear(0, 6, 0, 294, [[0, '#2c253a'], [1, '#110e17']]); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = f; ctx.stroke();
+  const st = list.map((c) => c.model.state).filter(Boolean);
+  const dead = st.filter((x) => x.status === 'dead').length;
+  const maxCtx = Math.round(Math.max(0, ...st.map((x) => x.contextPct || 0)) * 100);
+  const rows = [
+    ['🐤', l.sumAlive(st.length - dead), '#fff2c2'],
+    ['💀', l.sumWeek(emptyCage.model.weeklyDeaths || 0), (emptyCage.model.weeklyDeaths || 0) ? '#ff9b9b' : 'rgba(255,255,255,0.7)'],
+    ['📈', l.sumCtx(maxCtx), maxCtx >= 80 ? '#ff8a8a' : maxCtx >= 60 ? '#ffd27a' : '#bcd0ff'],
+  ];
+  ctx.textAlign = 'center';
+  ctx.font = `700 ${12 * f}px "Segoe UI", system-ui, sans-serif`; ctx.fillStyle = '#ffd43b';
+  ctx.fillText('Kanarya', CX, 30 + 12 * f);
+  ctx.textAlign = 'left';
+  rows.forEach(([ic, txt, col], i) => {
+    const y = 30 + 12 * f + (i + 1) * 21 * f;
+    ctx.font = `${11 * f}px "Segoe UI Emoji", sans-serif`; ctx.fillStyle = '#fff'; ctx.fillText(ic, 22, y);
+    ctx.fillStyle = col; ctx.fillText(fitText(txt, 170, 10.5 * f, '600', 8 * f), 22 + 17 * f, y);
+  });
+  ctx.textAlign = 'center';
+  ctx.font = `${8.5 * f}px "Segoe UI", system-ui, sans-serif`; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText(fitText(l.sumHint, 200, 8.5 * f, '400', 7 * f), CX, 284);
 }
 
 // Küçük hücre etiketi: kafes koordinatlarında, ölçeğe göre büyütülmüş yazıyla.
@@ -530,10 +598,10 @@ function cellLabel(st, s) {
 function ctxBadge(p, f) {
   const pct = Math.round(clamp(p || 0, 0, 1) * 100);
   const col = pct >= 80 ? '#ff8a8a' : pct >= 60 ? '#ffd27a' : '#bcd0ff';
-  const txt = `${L().ctx} %${pct}`;
+  const txt = model.settings.lang === 'en' ? `${L().ctx} ${pct}%` : `${L().ctx} %${pct}`;
   ctx.font = `600 ${9.5 * f}px "Segoe UI", system-ui, sans-serif`;
   const pad = 7 * f; const w = ctx.measureText(txt).width + pad * 2; const h = 22 * f;
-  const x = 224 - w; const y = 12;
+  const x = 16; const y = 12;
   rrect(x, y, w, h, 6 * f); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = f; ctx.stroke();
   ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(txt, x + pad, y + 11 * f);
@@ -551,16 +619,16 @@ function drawCage(t, dt, full) {
   const name = scene ? scene.name : null;
   const ox = -mouse.x * 4; const oy = -mouse.y * 3;
 
-  const dead = st && st.status === 'dead' && name !== 'egg' && !(name === 'death' && s < 3);
-  const alive = !st || st.status === 'alive' || name === 'egg' || (name === 'death' && s < 3);
+  const dead = st && st.status === 'dead' && name !== 'egg' && !(name === 'death' && s < 2.8);
+  const alive = !st || st.status === 'alive' || name === 'egg' || (name === 'death' && s < 2.8);
   const lost = st ? (st.maxLives - st.lives) / Math.max(1, st.maxLives) : 0;
   let danger = st && st.status === 'dead' ? 0.9 : lost * 0.85;
-  if (name === 'death') danger = Math.max(danger, ease(seg(s, 0, 1.4)) * 0.95);
+  if (name === 'death') danger = Math.max(danger, ease(seg(s, 0, 0.7)) * 0.95);
   const mood = st ? st.mood : 'happy';
   const fatigue = st ? st.contextPct || 0 : 0;
 
   let shake = 0;
-  if (name === 'death' && s > 2.1 && s < 3.0) shake = (1 - seg(s, 2.1, 3.0)) * 4;
+  if (name === 'death' && s > 2.75 && s < 3.7) shake = (1 - seg(s, 2.75, 3.7)) * 5;
   if (name === 'injured' && s < 0.5) shake = 2.5 * (1 - s / 0.5);
   if (shake) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
 
@@ -575,7 +643,7 @@ function drawCage(t, dt, full) {
   }
 
   let sway = Math.sin(t * 0.9) * 0.012 + mouse.x * 0.01;
-  if (name === 'death' && s > 2.1) sway += Math.sin(s * 14) * 0.05 * Math.exp(-(s - 2.1) * 1.5);
+  if (name === 'death' && s > 2.75) sway += Math.sin(s * 14) * 0.07 * Math.exp(-(s - 2.75) * 1.3);
   if (name === 'injured') sway += Math.sin(s * 18) * 0.02 * Math.exp(-s * 2);
 
   drawChain(sway);
@@ -585,7 +653,7 @@ function drawCage(t, dt, full) {
   // kuş + tünek
   drawPerch(0);
   let bird = null;
-  if (alive && !(name === 'death' && s > 2.25)) {
+  if (alive && !(name === 'death' && s > 2.8)) {
     const breathe = Math.sin(t * (fatigue > 0.6 ? 1.6 : 2.6)) * 0.02;
     bird = { x: CX, y: BIRD_Y, s: 1, mood, lid: 0, flap: 0, sing: 0, lean: 0, squash: 1 + breathe };
     if (fatigue > 0.6) bird.lid = fatigue > 0.8 ? 0.75 : 0.5;
@@ -607,7 +675,7 @@ function drawCage(t, dt, full) {
     if (name === 'injured') { bird.flap = s < 0.6 ? Math.abs(Math.sin(s * 30)) : 0; if (s < 0.05 && !scene.burst) { scene.burst = 1; burstFeathers(CX, BIRD_Y, 7, 0.7); } }
     if (name === 'sick' && s < 1) bird.lean = 0.12 + Math.sin(s * 10) * 0.05;
     if (name === 'death') {
-      const panic = seg(s, 0.2, 2.1);
+      const panic = seg(s, 0.4, 2.8);
       bird.x += Math.sin(s * 50) * 1.4 * panic; bird.flap = panic > 0 ? Math.abs(Math.sin(s * 35)) : 0; bird.sing = panic; bird.lid = 0;
     }
     if (name === 'egg') {
@@ -625,17 +693,17 @@ function drawCage(t, dt, full) {
     ctx.restore();
   }
   if (name === 'egg') drawEgg(s);
-  if (dead || (name === 'death' && s > 4)) {
-    ctx.save(); ctx.globalAlpha = name === 'death' ? seg(s, 4, 4.6) : 1;
+  if (dead || (name === 'death' && s > 4.4)) {
+    ctx.save(); ctx.globalAlpha = name === 'death' ? seg(s, 4.4, 5) : 1;
     for (const [fx, r] of [[CX - 30, 0.3], [CX - 8, -0.8], [CX + 18, 1.1], [CX + 34, -0.2], [CX + 2, 0.6]]) { ctx.save(); ctx.translate(fx, BASE_Y - 2); ctx.rotate(r); ellipse(0, 0, 5, 1.6); ctx.fillStyle = palette('happy', variantOf()).lo; ctx.fill(); ctx.restore(); }
     ctx.restore();
   }
   ctx.restore();
 
-  drawCageFront(sway, dead || (name === 'death' && s > 2.2), name === 'death' ? Math.max(0, s - 2.2) : t);
+  drawCageFront(sway, dead || (name === 'death' && s > 2.8), name === 'death' ? Math.max(0, s - 2.8) : t);
 
   // kedi saldırısı (en ön katman)
-  if (name === 'death') drawAttack(s, t, ox);
+  if (name === 'death') { ctx.save(); rrect(8, 6, 224, 288, 24); ctx.clip(); drawAttack(s, t, ox); ctx.restore(); }
 
   stepParticles(dt);
   drawParticles();
@@ -643,36 +711,78 @@ function drawCage(t, dt, full) {
   if (name === 'injured' && s < 0.4) { ctx.fillStyle = `rgba(255,40,40,${0.28 * (1 - s / 0.4)})`; rrect(8, 6, 224, 288, 24); ctx.fill(); }
   if (name === 'sick' && s < 1.2) { ctx.fillStyle = `rgba(120,220,90,${0.18 * Math.sin(s / 1.2 * Math.PI)})`; rrect(8, 6, 224, 288, 24); ctx.fill(); }
 
-  if (dead || (name === 'death' && s > 4.3)) deathText(name === 'death' ? seg(s, 4.3, 5.2) : 1, st);
+  if (dead || (name === 'death' && s > 5.2)) deathText(name === 'death' ? seg(s, 5.2, 6) : 1, st);
   let shown = st;
   if (st && name === 'egg') shown = { ...st, status: 'alive', lives: st.maxLives };
-  else if (st && name === 'death' && s < 3.1) shown = { ...st, status: 'alive', lives: 1 };
+  else if (st && name === 'death' && s < 3.7) shown = { ...st, status: 'alive', lives: 1 };
   ctx.restore();
   if (full) footer(shown);
 }
 
+// Kedi saldırısı zaman çizelgesi (saniye):
+// 0–0.7 karanlıkta gözler · 0.7–1.8 sinsi yürüyüş · 1.8–2.3 popo sallama · 2.3–2.8 sıçrayış
+// 2.8–3.7 ısırık (ÇAT!) + çiğneme · 3.7–4.5 dudak yalama · 4.5–5.5 keyifle çıkış
+const ATTACK = { eyes: 0.7, creep: 1.8, wiggle: 2.3, pounce: 2.8, bite: 3.7, lick: 4.5, leave: 5.5 };
+const GROUND = 238;
+
 function drawAttack(s, t, ox) {
-  // 0–1.6 sinsice yaklaşır, 1.6–2.25 zıplar, 2.25–3.1 yer, 3.1–4.2 çekip gider
   let x; let y; let rot = 0; let stretch = 1; let mouth = 0; let reach = 0; let alpha = 1;
-  if (s < 1.6) {
-    const k = ease(seg(s, 0, 1.6));
-    x = lerp(-70, 48, k); y = 214 + Math.sin(s * 7) * 1.2; mouth = 0.3 * k;
-  } else if (s < 2.25) {
-    const k = seg(s, 1.6, 2.25);
-    x = lerp(48, CX - 22, k); y = lerp(214, BIRD_Y + 6, k) - Math.sin(k * Math.PI) * 38; rot = lerp(-0.5, 0.15, k); stretch = 1.25; reach = 1; mouth = 1;
-  } else if (s < 3.1) {
-    const k = seg(s, 2.25, 3.1);
-    x = CX - 22; y = BIRD_Y + 6; mouth = Math.abs(Math.sin(k * Math.PI * 3)); reach = 0.6;
-    if (!scene.burst) { scene.burst = 1; burstFeathers(CX, BIRD_Y, 26, 1.3); }
+  let walk; let wiggle = 0; let tongue = 0; let holding = false; let noseFeather = false; let pupil = 0.3; let tailUp = false;
+  const A = ATTACK;
+  if (s < A.eyes) {
+    // yalnızca gözler, karanlıkta yavaşça açılır
+    const k = seg(s, 0, A.eyes);
+    lurkingEyes(30 + ox * 0.6, 206, 1.1 + k * 0.4, t);
+    return;
+  }
+  if (s < A.creep) {
+    const k = ease(seg(s, A.eyes, A.creep));
+    x = lerp(-60, 46, k); y = 216; walk = s * 9; mouth = 0.15; pupil = 0.5;
+  } else if (s < A.wiggle) {
+    const k = seg(s, A.creep, A.wiggle);
+    x = 46; y = 219; wiggle = Math.sin(k * Math.PI * 7) * 5 * Math.sin(k * Math.PI); pupil = 1; mouth = 0.2; stretch = 0.92;
+  } else if (s < A.pounce) {
+    const k = seg(s, A.wiggle, A.pounce);
+    x = lerp(46, CX - 24, ease(k)); y = lerp(216, BIRD_Y + 6, k) - Math.sin(k * Math.PI) * 42;
+    rot = lerp(-0.55, 0.15, k); stretch = 1.3; reach = 1; mouth = 1; pupil = 1;
+    // hız çizgileri
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    for (let i = 0; i < 4; i++) { const yy = y - 14 + i * 9; ctx.beginPath(); ctx.moveTo(x - 70 - i * 6, yy + 10); ctx.lineTo(x - 38 - i * 4, yy + 4); ctx.stroke(); }
+    ctx.restore();
+  } else if (s < A.bite) {
+    const k = seg(s, A.pounce, A.bite);
+    x = CX - 24; y = BIRD_Y + 6; mouth = Math.abs(Math.sin(k * Math.PI * 4)) * 0.7; reach = 0.5; holding = k > 0.25; pupil = 1;
+    if (!scene.burst) { scene.burst = 1; burstFeathers(CX, BIRD_Y, 34, 1.4); }
+    comicText(seg(s, A.pounce, A.pounce + 0.5));
+  } else if (s < A.lick) {
+    const k = seg(s, A.bite, A.lick);
+    x = CX - 24; y = lerp(BIRD_Y + 6, 216, ease(seg(k, 0, 0.35))); tongue = Math.abs(Math.sin(k * Math.PI * 3)); noseFeather = true;
   } else {
-    const k = ease(seg(s, 3.1, 4.2));
-    x = lerp(CX - 22, 300, k); y = lerp(BIRD_Y + 6, 214, k); alpha = 1 - seg(s, 3.8, 4.2); mouth = 0.2;
+    const k = ease(seg(s, A.lick, A.leave));
+    x = lerp(CX - 24, 310, k); y = 216; walk = s * 7; tailUp = true; noseFeather = true; alpha = 1 - seg(s, A.leave - 0.3, A.leave);
   }
-  if (s > 2.2 && s < 2.5) { ctx.fillStyle = `rgba(255,30,30,${0.45 * (1 - seg(s, 2.2, 2.5))})`; rrect(8, 6, 224, 288, 24); ctx.fill(); }
-  if (s < 2.25 && s > 0.2) { // kuşun "!" paniği
-    ctx.font = 'bold 18px "Segoe UI", sans-serif'; ctx.fillStyle = '#ff5050'; ctx.textAlign = 'center'; ctx.fillText('!', CX + 26, BIRD_Y - 34);
+  // yer gölgesi (havadayken küçülür)
+  const air = clamp((216 - y) / 60, 0, 1);
+  ellipse(x + ox * 0.6, GROUND, 40 * (1 - air * 0.5), 5 * (1 - air * 0.5));
+  ctx.fillStyle = `rgba(0,0,0,${0.4 * alpha * (1 - air * 0.6)})`; ctx.fill();
+  if (s > A.pounce - 0.05 && s < A.pounce + 0.3) { ctx.fillStyle = `rgba(255,40,40,${0.5 * (1 - seg(s, A.pounce - 0.05, A.pounce + 0.3))})`; rrect(8, 6, 224, 288, 24); ctx.fill(); }
+  if (s > A.eyes && s < A.pounce) { // kuşun paniği
+    ctx.font = 'bold 18px "Segoe UI", sans-serif'; ctx.fillStyle = '#ff5050'; ctx.textAlign = 'center';
+    ctx.fillText(s > A.creep ? '!!' : '!', CX + 26, BIRD_Y - 34);
   }
-  drawCat({ x: x + ox * 0.6, y, s: 1.1, rot, stretch, mouth, reach, alpha, t });
+  drawCat({ x: x + ox * 0.6, y, s: 1.1, rot, stretch, mouth, reach, alpha, t, walk, wiggle, tongue, holding, noseFeather, pupil, tailUp });
+}
+
+function comicText(k) {
+  if (k <= 0 || k >= 1) return;
+  const pop = k < 0.3 ? ease(k / 0.3) * 1.25 : 1.25 - (k - 0.3) * 0.35;
+  ctx.save(); ctx.translate(CX + 40, 92); ctx.rotate(-0.18); ctx.scale(pop, pop);
+  ctx.globalAlpha = k > 0.75 ? (1 - k) / 0.25 : 1;
+  ctx.font = '900 24px "Segoe UI Black", "Segoe UI", sans-serif'; ctx.textAlign = 'center';
+  const word = model.settings.lang === 'en' ? 'CHOMP!' : 'ÇAT!';
+  ctx.lineWidth = 5; ctx.strokeStyle = '#1a0a0a'; ctx.strokeText(word, 0, 0);
+  ctx.fillStyle = '#ffde3b'; ctx.fillText(word, 0, 0);
+  ctx.restore();
 }
 
 function drawEgg(s) {
@@ -751,6 +861,10 @@ cv.addEventListener('contextmenu', (e) => {
   const c = cageAt(e.clientX, e.clientY);
   window.kanarya && window.kanarya.menu(c ? c.id : null);
 });
+cv.addEventListener('click', (e) => {
+  // Özet kartına tıklayınca menü (ayarlar)
+  if (cages.length > 1 && cages.length % 2 === 1 && !cageAt(e.clientX, e.clientY)) window.kanarya && window.kanarya.menu(null);
+});
 cv.addEventListener('dblclick', (e) => {
   const c = cageAt(e.clientX, e.clientY);
   if (c && c.model.state && c.model.state.status === 'alive') playOn(c, 'ok');
@@ -804,6 +918,7 @@ window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
   const labels = lang === 'en' ? ['Refactor auth module', 'Fix flaky checkout tests', 'Landing page SEO', 'Migrate API client', 'Release notes 2.1', 'Docs cleanup'] : ['Giriş modülünü düzenle', 'Ödeme testlerini düzelt', 'Tanıtım sayfası SEO', 'API istemcisini taşı', 'Sürüm notları 2.1', 'Belge temizliği'];
   const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead'];
   frozen = { t: 10 };
+  emptyCage.model = { state: null, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
   cages = [];
   for (let i = 0; i < count; i++) {
     const v = (variant + i) % 5;
