@@ -13,11 +13,13 @@ const TXT = {
   tr: { alive: (n, m, tired) => `${n} · ${tired ? 'uykulu' : m === 'injured' ? 'yaralı' : m === 'sick' ? 'hasta' : 'yaşıyor'}`,
     dead: (n) => `${n} · öldü`, died: 'KANARYA ÖLDÜ', hall: 'uydurdu, kedi geldi', blur: 'bağlam bulanıklaştı',
     hint: '/compact ya da sağ tık → yeni yumurta', wait: 'Oturum bekleniyor', waitHint: 'Claude Code ya da Codex aç', ctx: 'bağlam',
-    sumAlive: (n) => `${n} kanarya yaşıyor`, sumWeek: (k) => `bu hafta ${k} ölüm`, sumCtx: (p) => `en dolu bağlam %${p}`, sumHint: 'tıkla: ayarlar' },
+    sumAlive: (n) => `${n} kanarya yaşıyor`, sumWeek: (k) => `bu hafta ${k} ölüm`, sumCtx: (p) => `en dolu bağlam %${p}`, sumHint: 'tıkla: ayarlar', sumMore: (n) => `+${n} oturum daha`,
+    short: { alive: (n) => `${n} yaşıyor`, week: (k) => `${k} ölüm / 7 gün`, ctx: (p) => `en dolu %${p}`, more: (n) => `+${n} oturum` } },
   en: { alive: (n, m, tired) => `${n} · ${tired ? 'sleepy' : m === 'injured' ? 'injured' : m === 'sick' ? 'sick' : 'alive'}`,
     dead: (n) => `${n} · dead`, died: 'CANARY DIED', hall: 'made things up, the cat came', blur: 'context got blurry',
     hint: '/compact or right-click → new egg', wait: 'Waiting for a session', waitHint: 'Open Claude Code or Codex', ctx: 'context',
-    sumAlive: (n) => `${n} canar${n === 1 ? 'y' : 'ies'} alive`, sumWeek: (k) => `${k} death${k === 1 ? '' : 's'} this week`, sumCtx: (p) => `fullest context ${p}%`, sumHint: 'click: settings' },
+    sumAlive: (n) => `${n} canar${n === 1 ? 'y' : 'ies'} alive`, sumWeek: (k) => `${k} death${k === 1 ? '' : 's'} this week`, sumCtx: (p) => `fullest context ${p}%`, sumHint: 'click: settings', sumMore: (n) => `+${n} more session${n === 1 ? '' : 's'}`,
+    short: { alive: (n) => `${n} alive`, week: (k) => `${k} deaths / 7d`, ctx: (p) => `max ${p}%`, more: (n) => `+${n} more` } },
 };
 
 // ---------- durum ----------
@@ -442,7 +444,12 @@ function heart(x, y, s, filled) {
 // Metni genişliğe sığdır: önce küçült, yine sığmazsa sonuna … koy.
 function fitText(text, maxW, size, weight = '600', min = 9, family = '"Segoe UI", system-ui, sans-serif') {
   let sz = size;
-  for (; sz > min; sz -= 0.5) { ctx.font = `${weight} ${sz}px ${family}`; if (ctx.measureText(text).width <= maxW) return text; }
+  for (;;) {
+    ctx.font = `${weight} ${sz}px ${family}`;
+    if (ctx.measureText(text).width <= maxW) return text;
+    if (sz <= min) break;
+    sz = Math.max(min, sz - 0.5);
+  }
   ctx.font = `${weight} ${min}px ${family}`;
   let t = String(text);
   while (t.length > 1 && ctx.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
@@ -479,8 +486,10 @@ function footer(st) {
   // proje · ajan
   if (st && (st.label || st.agentName)) {
     const line = [st.label, st.agentName].filter(Boolean).join(' · ');
-    const t2 = fitText(line, maxW, 10.5, '500', 9, 'Consolas, "Cascadia Mono", monospace');
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillText(t2, CX, 277);
+    const t2 = fitText(line, maxW - 16, 10.5, '500', 10.5, 'Consolas, "Cascadia Mono", monospace');
+    const w2 = ctx.measureText(t2).width;
+    agentGlyph(st.agentKind || (st.agentName === 'Codex' ? 'codex' : 'claude'), CX - w2 / 2 - 2, 273.5, 5.5);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillText(t2, CX + 8, 277);
   } else if (!st) {
     ctx.font = '10px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillText(l.waitHint, CX, 277);
   }
@@ -505,7 +514,24 @@ function withCage(c, fn) {
   model = c.model; scene = c.scene; particles = c.particles; lastEventId = c.lastEventId; seed = c.seed;
   try { fn(); } finally { c.scene = scene; c.particles = particles; c.lastEventId = lastEventId; }
 }
-function gridOf(n) { const cols = n <= 1 ? 1 : 2; return { cols, rows: Math.max(1, Math.ceil(n / cols)) }; }
+
+// Düzen: pencere (240x300) içinde kafes ve özet kartı yuvaları.
+// 1 → tam boy · 2 → üstte 2 kafes + altta geniş özet · 3 → 2x2 (+özet) · 4 → 2x2
+// 5–6 → 2x3 (5'te +özet) · 7+ → ilk 5 kafes + "+N" özet
+const MAX_SHOWN = 6;
+function layout(n) {
+  const slots = [];
+  const cell = (x, y, w, h, kind, i) => slots.push({ x, y, w, h, kind, i });
+  if (n <= 1) { cell(0, 0, W, H, 'full', 0); return slots; }
+  if (n === 2) { cell(0, 0, 120, 150, 'cage', 0); cell(120, 0, 120, 150, 'cage', 1); cell(0, 150, 240, 150, 'summary'); return slots; }
+  if (n <= 4) {
+    for (let i = 0; i < 4; i++) cell((i % 2) * 120, Math.floor(i / 2) * 150, 120, 150, i < n ? 'cage' : 'summary', i);
+    return slots;
+  }
+  const shown = n > MAX_SHOWN ? 5 : n;
+  for (let i = 0; i < 6; i++) cell((i % 2) * 120, Math.floor(i / 2) * 100, 120, 100, i < shown ? 'cage' : 'summary', i);
+  return slots;
+}
 
 function render() {
   const t = nowS();
@@ -516,92 +542,117 @@ function render() {
   ctx.clearRect(0, 0, cv.width, cv.height);
   const k = cv.width / W;
   const list = cages.length ? cages : [emptyCage];
-  if (list.length === 1) {
+  for (const sl of layout(list.length)) {
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    withCage(list[0], () => drawCage(t, dt, true));
-    return;
-  }
-  // Izgara: aynı pencere boyunda 2 sütun; her hücrede küçültülmüş kafes + okunaklı etiket.
-  const { cols, rows } = gridOf(list.length);
-  const cw = W / cols; const ch = H / rows;
-  const s = Math.min((cw - 4) / 224, (ch - 4) / 288);
-  list.forEach((c, i) => {
-    const x0 = (i % cols) * cw; const y0 = Math.floor(i / cols) * ch;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
-    ctx.translate(x0 + (cw - 224 * s) / 2 - 8 * s, y0 + (ch - 288 * s) / 2 - 6 * s);
+    if (sl.kind === 'full') { withCage(list[0], () => drawCage(t, dt, true)); continue; }
+    if (sl.kind === 'summary') { summaryCard(list, sl); continue; }
+    const c = list[sl.i];
+    const compact = sl.h < 130; // kısa hücre: zincir/kubbe kırpılır, görünür bölge kafes biriminde y=CROP..294
+    const CROP = 92;
+    const s = compact ? Math.min((sl.w - 4) / 224, (sl.h - 4) / (294 - CROP)) : Math.min((sl.w - 4) / 224, (sl.h - 4) / 288);
+    const top = compact ? CROP : 6;
+    ctx.save();
+    if (compact) { rrect(sl.x + 2, sl.y + 2, sl.w - 4, sl.h - 4, 12); ctx.clip(); }
+    ctx.translate(sl.x + (sl.w - 224 * s) / 2 - 8 * s, sl.y + (sl.h - (294 - top) * s) / 2 - top * s);
     ctx.scale(s, s);
-    withCage(c, () => { drawCage(t, dt, false); cellLabel(c.model.state, s); });
-  });
-  // Tek sayıda oturumda boş kalan hücre: özet kartı.
-  if (list.length % 2 === 1) {
-    const i = list.length;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
-    ctx.translate((i % cols) * cw + (cw - 224 * s) / 2 - 8 * s, Math.floor(i / cols) * ch + (ch - 288 * s) / 2 - 6 * s);
-    ctx.scale(s, s);
-    summaryCard(list, 1 / s);
+    withCage(c, () => { drawCage(t, dt, false); cellLabel(c.model.state, s, compact ? top + 4 : 12); });
+    ctx.restore();
   }
 }
 
-function summaryCard(list, f) {
+// Özet kartı: gerçek piksel biriminde çizilir (yuvanın boyuna göre satır sayısı).
+function summaryCard(list, sl) {
   const l = L();
   model = emptyCage.model;
-  rrect(8, 6, 224, 288, 24);
-  ctx.fillStyle = linear(0, 6, 0, 294, [[0, '#2c253a'], [1, '#110e17']]); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = f; ctx.stroke();
+  const x = sl.x + 3; const y = sl.y + 3; const w = sl.w - 6; const h = sl.h - 6;
+  rrect(x, y, w, h, 12);
+  ctx.fillStyle = linear(0, y, 0, y + h, [[0, '#2c253a'], [1, '#110e17']]); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
   const st = list.map((c) => c.model.state).filter(Boolean);
-  const dead = st.filter((x) => x.status === 'dead').length;
-  const maxCtx = Math.round(Math.max(0, ...st.map((x) => x.contextPct || 0)) * 100);
-  const rows = [
-    ['🐤', l.sumAlive(st.length - dead), '#fff2c2'],
-    ['💀', l.sumWeek(emptyCage.model.weeklyDeaths || 0), (emptyCage.model.weeklyDeaths || 0) ? '#ff9b9b' : 'rgba(255,255,255,0.7)'],
-    ['📈', l.sumCtx(maxCtx), maxCtx >= 80 ? '#ff8a8a' : maxCtx >= 60 ? '#ffd27a' : '#bcd0ff'],
-  ];
-  ctx.textAlign = 'center';
-  ctx.font = `700 ${12 * f}px "Segoe UI", system-ui, sans-serif`; ctx.fillStyle = '#ffd43b';
-  ctx.fillText('Kanarya', CX, 30 + 12 * f);
+  const dead = st.filter((v) => v.status === 'dead').length;
+  const maxCtx = Math.round(Math.max(0, ...st.map((v) => v.contextPct || 0)) * 100);
+  const extra = Math.max(0, list.length - 5);
+  const rows = [];
+  const sh = w < 160 ? l.short : { alive: l.sumAlive, week: l.sumWeek, ctx: l.sumCtx, more: l.sumMore };
+  if (list.length > MAX_SHOWN) rows.push(['➕', sh.more(extra), '#ffe9a8']);
+  rows.push(['🐤', sh.alive(st.length - dead), '#fff2c2']);
+  rows.push(['💀', sh.week(emptyCage.model.weeklyDeaths || 0), (emptyCage.model.weeklyDeaths || 0) ? '#ff9b9b' : 'rgba(255,255,255,0.7)']);
+  rows.push(['📈', sh.ctx(maxCtx), maxCtx >= 80 ? '#ff8a8a' : maxCtx >= 60 ? '#ffd27a' : '#bcd0ff']);
+  const lineH = 16; const top = y + 10;
   ctx.textAlign = 'left';
-  rows.forEach(([ic, txt, col], i) => {
-    const y = 30 + 12 * f + (i + 1) * 21 * f;
-    ctx.font = `${11 * f}px "Segoe UI Emoji", sans-serif`; ctx.fillStyle = '#fff'; ctx.fillText(ic, 22, y);
-    ctx.fillStyle = col; ctx.fillText(fitText(txt, 170, 10.5 * f, '600', 8 * f), 22 + 17 * f, y);
+  ctx.font = '700 12px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = '#ffd43b';
+  ctx.fillText('Kanarya', x + 10, top + 10);
+  const room = Math.floor((h - 34) / lineH);
+  rows.slice(0, Math.max(1, room)).forEach(([ic, txt, col], i) => {
+    const yy = top + 10 + (i + 1) * lineH;
+    ctx.font = '10px "Segoe UI Emoji", sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(ic, x + 10, yy);
+    ctx.fillStyle = col; ctx.fillText(fitText(txt, w - 38, 10.5, '600', 10.5), x + 26, yy);
   });
+  if (h > 90) {
+    ctx.font = '9px "Segoe UI", system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(l.sumHint, x + 10, y + h - 8);
+  }
   ctx.textAlign = 'center';
-  ctx.font = `${8.5 * f}px "Segoe UI", system-ui, sans-serif`; ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText(fitText(l.sumHint, 200, 8.5 * f, '400', 7 * f), CX, 284);
 }
 
-// Küçük hücre etiketi: kafes koordinatlarında, ölçeğe göre büyütülmüş yazıyla.
-function cellLabel(st, s) {
-  if (!st) return;
-  const l = L(); const f = 1 / s; // f: gerçek pikseli mantıksal birime çevirir
-  ctx.textAlign = 'center';
-  rrect(8, 236, 224, 58, 18); ctx.fillStyle = 'rgba(10,8,14,0.82)'; ctx.fill();
-  const dot = palette('happy', st.variant || 0).mid;
-  const title = fitText(st.label || st.name, 196, 11.5 * f, '700', 8.5 * f);
-  const tw = ctx.measureText(title).width;
-  ctx.fillStyle = dot; ellipse(CX - tw / 2 - 5.5 * f, 252, 3.2 * f, 3.2 * f); ctx.fill();
-  ctx.fillStyle = st.status === 'dead' ? '#ff8a8a' : '#fff6d6'; ctx.fillText(title, CX + 2 * f, 252 + 4 * f);
-  const sub = st.status === 'dead' ? l.dead(st.name) : l.alive(st.name, st.mood, (st.contextPct || 0) > 0.8);
-  const line = fitText(st.agentName === 'Codex' ? `${sub} · Codex` : sub, 150, 9 * f, '500', 7.5 * f);
-  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.textAlign = 'left'; ctx.fillText(line, 22, 280 + 2 * f);
-  ctx.textAlign = 'center';
-  if (st.status !== 'dead') {
-    const n = st.maxLives || 3;
-    for (let i = 0; i < n; i++) heart(214 - (n - 1 - i) * 8.5 * f, 277 + 1.5 * f, 0.62 * f, i < st.lives);
+// Ajan simgesi (resmî logo değil, sade çağrışım): Claude → turuncu ışın, Codex → ">_" terminal.
+function agentGlyph(kind, x, y, r) {
+  ctx.save(); ctx.translate(x, y);
+  if (kind === 'codex') {
+    rrect(-r, -r, 2 * r, 2 * r, r * 0.45); ctx.fillStyle = '#f4f4f4'; ctx.fill();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = r * 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.4); ctx.lineTo(-r * 0.1, 0); ctx.lineTo(-r * 0.5, r * 0.4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.05, r * 0.45); ctx.lineTo(r * 0.55, r * 0.45); ctx.stroke();
+  } else {
+    ctx.strokeStyle = '#d97757'; ctx.lineCap = 'round';
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + 0.2; const len = i % 2 ? r * 0.72 : r;
+      ctx.lineWidth = r * (i % 2 ? 0.2 : 0.26);
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.18, Math.sin(a) * r * 0.18); ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len); ctx.stroke();
+    }
   }
+  ctx.restore();
+}
+const agentShort = (st) => (st.agentKind === 'codex' || st.agentName === 'Codex' ? 'Codex' : st.agentName === 'Claude App' ? 'App' : 'Code');
+
+// Küçük hücre etiketi: yazı boyu SABİT (gerçek 11px / 9px); sığmazsa yalnızca "…" ile kısalır.
+function cellLabel(st, s, badgeY = 12) {
+  if (!st) return;
+  const l = L(); const f = 1 / s; // f: gerçek pikseli kafes birimine çevirir
+  const boxH = Math.min(120, 30 * f);
+  const top = 294 - boxH;
+  rrect(8, top, 224, boxH, Math.min(18, 8 * f)); ctx.fillStyle = 'rgba(10,8,14,0.85)'; ctx.fill();
+  const ty = top + 12 * f; const sy = top + 24.5 * f;
+  agentGlyph(st.agentKind || (st.agentName === 'Codex' ? 'codex' : 'claude'), 16 + 5.5 * f, ty - 3.8 * f, 5 * f);
+  ctx.textAlign = 'left';
+  const title = fitText(st.label || st.name, 216 - 20 - 13 * f, 11 * f, '700', 11 * f);
+  ctx.fillStyle = st.status === 'dead' ? '#ff8a8a' : '#fff6d6'; ctx.fillText(title, 16 + 13 * f, ty);
+  // alt satır: kanarya adı (rengiyle) · ajan
+  const n = st.maxLives || 3;
+  const heartsW = st.status === 'dead' ? 0 : n * 8.5 * f;
+  ctx.font = `600 ${9 * f}px "Segoe UI", system-ui, sans-serif`;
+  const nameTxt = st.status === 'dead' ? l.dead(st.name) : st.name;
+  ctx.fillStyle = st.status === 'dead' ? '#ff8a8a' : palette('happy', st.variant || 0).mid;
+  const nm = fitText(nameTxt, 120, 9 * f, '600', 9 * f);
+  ctx.fillText(nm, 16, sy);
+  const nw = ctx.measureText(nm).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(fitText(` · ${agentShort(st)}`, Math.max(10, 224 - 16 - nw - heartsW - 6), 9 * f, '500', 9 * f), 16 + nw, sy);
+  ctx.textAlign = 'center';
+  if (st.status !== 'dead') for (let i = 0; i < n; i++) heart(226 - (n - 1 - i) * 8.5 * f - 4 * f, sy - 3 * f, 0.6 * f, i < st.lives);
   const pct = clamp(st.contextPct || 0, 0, 1);
-  if (pct > 0.005 && st.status !== 'dead') ctxBadge(pct, f);
+  if (pct > 0.005 && st.status !== 'dead') ctxBadge(pct, f, badgeY);
 }
 
 // Bağlam doluluğu: yazılı rozet ("bağlam 42%") + rozetin içinde altta doluluk çubuğu.
 // f: ızgarada küçülen kafeste yazının gerçek boyutta okunur kalması için büyütme.
-function ctxBadge(p, f) {
+function ctxBadge(p, f, y = 12) {
   const pct = Math.round(clamp(p || 0, 0, 1) * 100);
   const col = pct >= 80 ? '#ff8a8a' : pct >= 60 ? '#ffd27a' : '#bcd0ff';
   const txt = model.settings.lang === 'en' ? `${L().ctx} ${pct}%` : `${L().ctx} %${pct}`;
   ctx.font = `600 ${9.5 * f}px "Segoe UI", system-ui, sans-serif`;
   const pad = 7 * f; const w = ctx.measureText(txt).width + pad * 2; const h = 22 * f;
-  const x = 16; const y = 12;
+  const x = 16;
   rrect(x, y, w, h, 6 * f); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = f; ctx.stroke();
   ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(txt, x + pad, y + 11 * f);
@@ -843,11 +894,14 @@ function resize() {
 window.addEventListener('resize', () => { resize(); kick(); });
 resize();
 
+function slotAt(x, y) {
+  const px = x / window.innerWidth * W; const py = y / window.innerHeight * H;
+  return layout(Math.max(1, cages.length)).find((sl) => px >= sl.x && px < sl.x + sl.w && py >= sl.y && py < sl.y + sl.h) || null;
+}
 function cageAt(x, y) {
-  if (cages.length <= 1) return cages[0] || null;
-  const { cols, rows } = gridOf(cages.length);
-  const i = Math.floor(y / (window.innerHeight / rows)) * cols + Math.floor(x / (window.innerWidth / cols));
-  return cages[i] || null;
+  const sl = slotAt(x, y);
+  if (!sl || sl.kind === 'summary') return null;
+  return cages[sl.kind === 'full' ? 0 : sl.i] || null;
 }
 function playOn(c, name) { if (c) withCage(c, () => play(name)); kick(); }
 
@@ -863,7 +917,8 @@ cv.addEventListener('contextmenu', (e) => {
 });
 cv.addEventListener('click', (e) => {
   // Özet kartına tıklayınca menü (ayarlar)
-  if (cages.length > 1 && cages.length % 2 === 1 && !cageAt(e.clientX, e.clientY)) window.kanarya && window.kanarya.menu(null);
+  const sl = slotAt(e.clientX, e.clientY);
+  if (sl && sl.kind === 'summary') window.kanarya && window.kanarya.menu(null);
 });
 cv.addEventListener('dblclick', (e) => {
   const c = cageAt(e.clientX, e.clientY);
@@ -914,9 +969,10 @@ window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
     sick: { mood: 'sick', lives: 1, status: 'alive', contextPct: 0.5 },
     dead: { mood: 'injured', lives: 0, status: 'dead', contextPct: 0.5, deathCause: 'hallucination' },
   };
-  const names = lang === 'en' ? ['Lemon', 'Mango', 'Pip', 'Honey', 'Biscuit', 'Sunny'] : ['Limon', 'Fıstık', 'Pamuk', 'Zerdali', 'Tarçın', 'Bal'];
-  const labels = lang === 'en' ? ['Refactor auth module', 'Fix flaky checkout tests', 'Landing page SEO', 'Migrate API client', 'Release notes 2.1', 'Docs cleanup'] : ['Giriş modülünü düzenle', 'Ödeme testlerini düzelt', 'Tanıtım sayfası SEO', 'API istemcisini taşı', 'Sürüm notları 2.1', 'Belge temizliği'];
-  const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead'];
+  const names = lang === 'en' ? ['Lemon', 'Mango', 'Pip', 'Honey', 'Biscuit', 'Sunny', 'Butter', 'Peaches'] : ['Limon', 'Fıstık', 'Pamuk', 'Zerdali', 'Tarçın', 'Bal', 'Lokum', 'Güneş'];
+  const labels = lang === 'en' ? ['Refactor auth module', 'Fix flaky checkout tests', 'Landing page SEO', 'Migrate API client', 'Release notes 2.1', 'Docs cleanup', 'Upgrade dependencies', 'Write onboarding guide'] : ['Giriş modülünü düzenle', 'Ödeme testlerini düzelt', 'Tanıtım sayfası SEO', 'API istemcisini taşı', 'Sürüm notları 2.1', 'Belge temizliği', 'Bağımlılık güncelleme', 'Başlangıç kılavuzu'];
+  const order = [what, 'injured', 'sick', 'sleepy', 'happy', 'dead', 'happy', 'happy'];
+  const agents = [['Claude Code', 'claude'], ['Claude App', 'claude'], ['Codex', 'codex']];
   frozen = { t: 10 };
   emptyCage.model = { state: null, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
   cages = [];
@@ -924,7 +980,7 @@ window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1) => {
     const v = (variant + i) % 5;
     const key = order[i] in states ? order[i] : (order[i] === 'death' ? 'injured' : 'happy');
     const c = mkCage(`c${i}`);
-    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: i === 3 ? 'Codex' : 'Claude', maxLives: 3, ...states[key] }, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
+    c.model = { state: { name: names[i], variant: v, label: labels[i], agentName: agents[i % 3][0], agentKind: agents[i % 3][1], maxLives: 3, ...states[key] }, settings: { lang, onDeath: { sound: false } }, weeklyDeaths: 2 };
     if (i === 0 && SCENES[what]) {
       if (what === 'death') c.model.state = { ...c.model.state, status: 'dead', lives: 0, deathCause: 'hallucination' };
       c.scene = { name: what, start: 10 };

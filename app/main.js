@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const core = require('../lib/core');
 
-const W = 240; const H = 300; const MARGIN = 12; const MAX = 6;
+const W = 240; const H = 300; const MARGIN = 12; const MAX = 12;
 const ICON = path.join(__dirname, 'icon.png');
 const args = process.argv.slice(1);
 const snapshot = (args.find((a) => a.startsWith('--snapshot=')) || '').slice(11); // sahne:saniye:çıktı.png[:değişken[:adet]]
@@ -35,7 +35,8 @@ const L = {
   en: { settings: 'Settings…', egg: (n) => `${n}: new egg 🥚`, demo: 'Watch the cat attack', hide: 'Hide', quit: 'Close canary',
     dead: (n, p) => `${n} died 💀${p ? ` · ${p}` : ''}`, deadBody: (a) => `${a} started making things up or its context got blurry. Run /compact or open a new session.` },
 };
-const agentName = (a) => (a === 'codex' ? 'Codex' : 'Claude');
+// Claude Code (terminal) · Claude App (masaüstü uygulamasının Code sekmesi) · Codex
+const agentName = (a, entry) => (a === 'codex' ? 'Codex' : entry === 'claude-desktop' ? 'Claude App' : 'Claude Code');
 const folder = (cwd) => (cwd ? path.basename(String(cwd).replace(/[\\/]+$/, '')) : '');
 function label(s) {
   // Hangi kanaryanın hangi oturum olduğu: önce oturum başlığı, sonra ilk mesaj, en son klasör.
@@ -116,11 +117,11 @@ function scan() {
       seenEvents.add(s.event.id);
       if (!firstScan && s.event.type === 'death' && settings.onDeath.notification && Notification.isSupported()) {
         const l = L[settings.lang];
-        new Notification({ title: l.dead(s.name, label(s)), body: l.deadBody(agentName(s.agent)), silent: !settings.onDeath.sound, icon: ICON }).show();
+        new Notification({ title: l.dead(s.name, label(s)), body: l.deadBody(agentName(s.agent, s.entrypoint)), silent: !settings.onDeath.sound, icon: ICON }).show();
       }
     }
   }
-  const pub = sessions.map((s) => ({ ...s, word: undefined, label: label(s), folder: folder(s.cwd), agentName: agentName(s.agent) })); // kelime pencereye gitmez
+  const pub = sessions.map((s) => ({ ...s, word: undefined, label: label(s), folder: folder(s.cwd), agentName: agentName(s.agent, s.entrypoint), agentKind: s.agent === 'codex' ? 'codex' : 'claude' })); // kelime pencereye gitmez
   const payload = { sessions: pub, settings, weeklyDeaths: core.weeklyDeaths(), replay: !firstScan };
   firstScan = false;
   const sig = JSON.stringify(payload);

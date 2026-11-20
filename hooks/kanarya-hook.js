@@ -165,6 +165,7 @@ function onStop(input, settings) {
   }
   state.ended = false;
   if (parsed.title) state.title = parsed.title;
+  if (parsed.entrypoint) state.entrypoint = parsed.entrypoint;
   if (state.pendingCheck && state.status === 'alive') {
     let answer = core.extractTag(input.last_assistant_message) ?? core.extractTag(parsed.text);
     if (answer === null && input.transcript_path) {
