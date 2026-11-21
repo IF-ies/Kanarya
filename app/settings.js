@@ -5,6 +5,7 @@ const S = {
     name: 'Kanaryanın adı', nameHint: 'Boş bırakılırsa her yumurtada rastgele', death: 'Kanarya ölünce',
     note: "Claude'a not gönder", noteHint: 'Bir sonraki mesajda "bağlamın kaydı, /compact öner" der',
     notif: 'Windows bildirimi', sound: 'Ses (tıslama, miyav, çığlık)', window: 'Pencere', corner: 'Köşe', scale: 'Boyut',
+    through: 'Tıklamalar arkaya geçsin', throughHint: 'Kanarya yokmuş gibi; menü için saatin yanındaki simgeyi kullan',
     top: 'Hep üstte dursun', auto: 'Oturum açılınca kendiliğinden başlasın', ctx: 'Bağlam boyu', ctxHint: 'Yorgunluk hesabı için (modelinize göre)',
     save: 'Kaydet', saved: 'Kaydedildi ✓', backdrop: 'Zemin koyuluğu', clear: 'Şeffaf arka plan', clearHint: 'Kart zemini olmaz, kafes masaüstünde asılı durur', theme: 'Tema', themes: { dark: 'Koyu', light: 'Açık', system: 'Sistem' }, corners: { 'top-right': 'Sağ üst', 'top-left': 'Sol üst', 'bottom-right': 'Sağ alt', 'bottom-left': 'Sol alt' } },
   en: { title: 'Kanarya settings', general: 'General', lang: 'Language', every: 'Check every N messages', everyHint: 'Lower catches problems earlier, costs a few more tokens',
@@ -12,6 +13,7 @@ const S = {
     name: "Canary's name", nameHint: 'Leave empty for a random name per egg', death: 'When the canary dies',
     note: 'Send Claude a note', noteHint: 'Next message tells it "your context drifted, suggest /compact"',
     notif: 'Desktop notification', sound: 'Sound (hiss, meow, squawk)', window: 'Window', corner: 'Corner', scale: 'Size',
+    through: 'Click through', throughHint: 'As if the canary was not there; use the tray icon for the menu',
     top: 'Always on top', auto: 'Start automatically with a session', ctx: 'Context size', ctxHint: 'Used for fatigue (match your model)',
     save: 'Save', saved: 'Saved ✓', backdrop: 'Backdrop darkness', clear: 'Transparent background', clearHint: 'No card behind the cage; it hangs on your desktop', theme: 'Theme', themes: { dark: 'Dark', light: 'Light', system: 'System' }, corners: { 'top-right': 'Top right', 'top-left': 'Top left', 'bottom-right': 'Bottom right', 'bottom-left': 'Bottom left' } },
 };
@@ -51,6 +53,7 @@ async function load() {
   if (!$('contextWindow').value) { $('contextWindow').insertAdjacentHTML('beforeend', `<option value="${current.contextWindow}">${current.contextWindow}</option>`); $('contextWindow').value = String(current.contextWindow); }
   $('transparent').checked = !!current.transparent;
   $('backdrop').value = current.backdrop ?? 40; syncBackdrop();
+  $('clickThrough').checked = !!current.clickThrough;
   $('alwaysOnTop').checked = current.alwaysOnTop; $('autoStart').checked = current.autoStart;
   for (const k of ['claudeNote', 'notification', 'sound']) $(k).checked = !!current.onDeath[k];
   refreshDropdowns();
@@ -125,7 +128,7 @@ $('save').addEventListener('click', async () => {
     lang: $('lang').value, theme: $('theme').value,
     checkEvery: Number($('checkEvery').value), lives: Number($('lives').value), healAfter: Number($('healAfter').value),
     canaryName: $('canaryName').value.trim(), corner: $('corner').value, scale: Number($('scale').value),
-    transparent: $('transparent').checked, backdrop: Number($('backdrop').value), alwaysOnTop: $('alwaysOnTop').checked, autoStart: $('autoStart').checked, contextWindow: Number($('contextWindow').value),
+    transparent: $('transparent').checked, backdrop: Number($('backdrop').value), clickThrough: $('clickThrough').checked, alwaysOnTop: $('alwaysOnTop').checked, autoStart: $('autoStart').checked, contextWindow: Number($('contextWindow').value),
     onDeath: { claudeNote: $('claudeNote').checked, notification: $('notification').checked, sound: $('sound').checked },
   });
   load();

@@ -74,7 +74,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'error') { try { fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `${new Date().toISOString()} [sahne] ${e.message} (${e.sourceId}:${e.lineNumber})\n`); } catch { /* yok */ } }
   });
-  win.once('ready-to-show', () => { if (snapshot) win.show(); else win.showInactive(); });
+  win.once('ready-to-show', () => { if (snapshot) win.show(); else win.showInactive(); applyClickThrough(); });
   win.webContents.on('render-process-gone', (_e, d) => {
     try { fs.appendFileSync(path.join(core.PATHS.home, 'hata.log'), `${new Date().toISOString()} [çöktü] ${d.reason} ${d.exitCode}\n`); } catch { /* yok */ }
   });
@@ -159,11 +159,21 @@ function makeTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: l.settings, click: openSettings },
     { label: l.toggle, click: () => { if (win) { if (win.isVisible()) win.hide(); else win.showInactive(); } } },
+    { label: l.through, type: 'checkbox', checked: !!settings.clickThrough, click: (it) => {
+      settings = core.saveSettings({ clickThrough: it.checked }); applyClickThrough(); lastSig = ''; scan();
+    } },
     { type: 'separator' },
     { label: l.quit, click: () => app.quit() },
   ]));
 }
-const TL = { tr: { toggle: 'Göster / gizle', settings: 'Ayarlar…', quit: 'Kanaryayı kapat' }, en: { toggle: 'Show / hide', settings: 'Settings…', quit: 'Close canary' } };
+const TL = { tr: { toggle: 'Göster / gizle', through: 'Tıklamalar arkaya geçsin', settings: 'Ayarlar…', quit: 'Kanaryayı kapat' }, en: { toggle: 'Show / hide', through: 'Click through', settings: 'Settings…', quit: 'Close canary' } };
+
+// Tıklama geçirgenliği: pencere fareyi görmezden gelir (forward: fare hareketi yine gelir, paralaks sürer).
+function applyClickThrough() {
+  if (!win || snapshot) return;
+  win.setIgnoreMouseEvents(!!settings.clickThrough, { forward: true });
+  if (tray) makeTray();
+}
 
 // Köşeden boyutlandırma (şeffaf pencere kendi kenarından boyutlanamıyor): oran korunur,
 // karşı köşe sabit kalır; bitince ölçek ve konum kaydedilir.
@@ -198,6 +208,7 @@ ipcMain.handle('settings:save', (_e, partial) => {
   settings = core.saveSettings(partial);
   if (win) {
     if (prev.alwaysOnTop !== settings.alwaysOnTop) win.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
+    applyClickThrough();
     if (prev.scale !== settings.scale || prev.corner !== settings.corner) win.setBounds(placement());
   }
   lastSig = ''; scan();

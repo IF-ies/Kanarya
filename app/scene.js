@@ -586,6 +586,7 @@ function render() {
 // Boyutlandırma tutamaçları: alt köşeler, yalnızca fare pencere üzerindeyken.
 const GRIP = 18;
 function gripAt(x, y) {
+  if (model.settings && model.settings.clickThrough) return null; // tıklama geçirgenken tutamaç yok
   const px = x / window.innerWidth * W; const py = y / window.innerHeight * H;
   if (py < H - GRIP) return null;
   if (px < GRIP) return 'bl';
@@ -593,7 +594,7 @@ function gripAt(x, y) {
   return null;
 }
 function drawGrips(k) {
-  if (!mouse.over && !resizing) return;
+  if ((!mouse.over && !resizing) || (model.settings && model.settings.clickThrough)) return;
   ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.strokeStyle = TH() === THEMES.light ? 'rgba(60,40,10,0.55)' : 'rgba(255,240,200,0.6)';
   ctx.lineWidth = 1.4; ctx.lineCap = 'round';
@@ -990,6 +991,7 @@ cv.addEventListener('dblclick', (e) => {
 if (window.kanarya) {
   window.kanarya.onState((p) => {
     emptyCage.model = { state: null, settings: p.settings, weeklyDeaths: p.weeklyDeaths };
+    const drag = document.getElementById('drag'); if (drag) drag.style.display = p.settings.clickThrough ? 'none' : '';
     const next = [];
     for (const st of p.sessions || []) {
       let c = cageMap.get(st.sessionId);
