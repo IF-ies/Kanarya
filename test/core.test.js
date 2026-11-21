@@ -121,3 +121,32 @@ test('tüm JS dosyaları sözdizimi açısından geçerli', () => {
     assert.strictEqual(r.status, 0, `${f}: ${r.stderr}`);
   }
 });
+
+test('Codex girdileriyle uçtan uca (transcript yok, last_assistant_message var)', () => {
+  core.saveSettings({ checkEvery: 2, lang: 'tr', autoStart: false, onDeath: { claudeNote: true } });
+  const sid = 'codex-oturum';
+  const run = (evt, input) => execFileSync(process.execPath, [HOOK, evt, '--codex'], { input: JSON.stringify(input), env: { ...process.env, KANARYA_HOME: HOME } }).toString();
+  const ctx = JSON.parse(run('session-start', { session_id: sid, source: 'startup', cwd: HOME, hook_event_name: 'SessionStart', model: 'gpt-5-codex', transcript_path: null }));
+  const st0 = core.loadSession(sid);
+  assert.strictEqual(st0.agent, 'codex');
+  assert.ok(ctx.hookSpecificOutput.additionalContext.includes(st0.word), 'kelime bağlama girdi');
+  run('prompt', { session_id: sid, turn_id: 't1', prompt: 'merhaba', hook_event_name: 'UserPromptSubmit', transcript_path: null });
+  const c2 = JSON.parse(run('prompt', { session_id: sid, turn_id: 't2', prompt: 'devam', hook_event_name: 'UserPromptSubmit', transcript_path: null }));
+  assert.ok(/kontrol/i.test(c2.hookSpecificOutput.additionalContext), '2. mesajda kontrol');
+  const out = run('stop', { session_id: sid, turn_id: 't2', stop_hook_active: false, last_assistant_message: `tamam\n<kanarya>${st0.word}</kanarya>`, transcript_path: null });
+  assert.deepStrictEqual(JSON.parse(out), {}, 'Codex Stop JSON ister');
+  const st = core.loadSession(sid);
+  assert.strictEqual(st.lastGrade, 'exact');
+  assert.strictEqual(st.firstPrompt, 'merhaba', 'Codex etiketi ilk mesajdan');
+  run('session-end', { session_id: sid, reason: 'other', hook_event_name: 'SessionEnd', transcript_path: null });
+  assert.strictEqual(core.loadSession(sid).ended, true, 'SessionEnd kanaryayı kaldırır');
+});
+
+test('Codex rollout transcript: bağlam penceresi token_count olayından', () => {
+  const tp = path.join(HOME, 'rollout.jsonl');
+  fs.writeFileSync(tp, [
+    { type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { total_tokens: 64000 }, model_context_window: 256000 } } },
+  ].map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const p = core.parseTranscript(tp);
+  assert.strictEqual(p.tokens, 64000); assert.strictEqual(p.window, 256000);
+});

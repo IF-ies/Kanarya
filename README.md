@@ -30,6 +30,7 @@ Kanarya is a **Claude Code plugin** made of **hooks** (`SessionStart`, `UserProm
 | Windows 10/11 | ✅ Tested (development machine) |
 | macOS | ⚠️ **Not tested yet.** Everything used is cross-platform (Node, Electron, tray in the menu bar), but it has not been run on a Mac. Reports and PRs welcome. |
 | Linux | ⚠️ **Not tested yet.** Transparent windows depend on the desktop compositor. |
+| OpenAI Codex | ⚠️ **Not tested in a real Codex session yet.** The hooks follow the Codex hooks docs and pass automated tests with Codex-shaped inputs (`last_assistant_message`, rollout transcript, `SessionEnd`). |
 
 ## Why?
 
