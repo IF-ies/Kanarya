@@ -134,7 +134,7 @@ function scan() {
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 500, height: 660, minWidth: 420, minHeight: 320, useContentSize: true, icon: ICON, resizable: true, minimizable: false, maximizable: true, autoHideMenuBar: true,
+    width: 460, height: 560, minWidth: 420, minHeight: 320, useContentSize: true, icon: ICON, resizable: true, minimizable: false, maximizable: true, autoHideMenuBar: true,
     title: settings.lang === 'en' ? 'Kanarya settings' : 'Kanarya ayarları', backgroundColor: '#141218',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -199,8 +199,8 @@ ipcMain.on('resize:end', () => { if (!rz) return; clearTimeout(rz.t); saveResize
 ipcMain.handle('settings:get', () => core.loadSettings());
 ipcMain.on('settings:fit', (_e, h) => {
   if (!settingsWin || !Number.isFinite(h)) return;
-  const max = screen.getPrimaryDisplay().workArea.height - 40;
-  settingsWin.setContentSize(500, Math.min(Math.ceil(h), max));
+  const max = Math.min(560, screen.getPrimaryDisplay().workArea.height - 40); // varsayılan boy küçük; kullanıcı köşeden büyütebilir
+  settingsWin.setContentSize(460, Math.min(Math.ceil(h), max));
 });
 ipcMain.handle('settings:save', (_e, partial) => {
   const prev = settings;
