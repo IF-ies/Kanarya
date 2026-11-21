@@ -3,14 +3,33 @@
 # Kanarya 🐤 — Context Canary for Claude Code & Codex
 
 **A Claude canary that tells you when Claude Code (or OpenAI Codex) loses context or starts hallucinating.**
-One small always-on-top window shows a canary for **every open session**: a single canary fills the cage, and 2–4 sessions share a 2×2 grid. Each canary is labelled with the session's title.
 A cute 2.5D canary sits in a cage on your desktop. When Claude's context gets blurry, the canary gets hurt. When Claude *makes something up*, a cat comes out of the dark and eats it.
 
 [🌐 Website](https://if-ies.github.io/Kanarya/) · [Türkçe ↓](#türkçe)
 
+<p align="center"><img src="docs/kedi-saldirisi.png" width="240" alt="Animated: a cat sneaks up, pounces and eats the canary when Claude hallucinates"></p>
+
 | Alive | Sick (the cat is watching) | Cat attack | Dead |
 |---|---|---|---|
 | ![Claude canary alive and singing](docs/mutlu.png) | ![Claude canary sick, cat eyes in the dark](docs/hasta.png) | ![Cat attacks the canary when Claude hallucinates](docs/kedi.png) | ![Canary died: Claude context lost](docs/oldu.png) |
+
+**Every open session gets its own canary** in one small always-on-top window, labelled with the session title and its agent (Claude Code, Claude App or Codex). Light, dark and transparent looks:
+
+| Many sessions | Light theme | Transparent | Settings |
+|---|---|---|---|
+| ![Four canaries, one per Claude Code / Claude App / Codex session](docs/izgara4.png) | ![Light theme with a summary card](docs/acik.png) | ![Transparent background over the desktop](docs/seffaf.png) | ![Settings window](docs/ayarlar.png) |
+
+## What is it? (plugin, not a skill or MCP)
+
+Kanarya is a **Claude Code plugin** made of **hooks** (`SessionStart`, `UserPromptSubmit`, `Stop`, `SessionEnd`) plus a few slash commands, and a small **desktop app** (Electron) that draws the canary. It is not a *skill*, because skills are instructions Claude chooses to load, while a canary must run on every message whether Claude wants it or not. It is not an *MCP server* either, because MCP gives Claude tools to call, while Kanarya checks Claude from the outside. The same hooks also run in **OpenAI Codex**.
+
+## Platforms
+
+| | Status |
+|---|---|
+| Windows 10/11 | ✅ Tested (development machine) |
+| macOS | ⚠️ **Not tested yet.** Everything used is cross-platform (Node, Electron, tray in the menu bar), but it has not been run on a Mac. Reports and PRs welcome. |
+| Linux | ⚠️ **Not tested yet.** Transparent windows depend on the desktop compositor. |
 
 ## Why?
 
@@ -100,6 +119,8 @@ Related keywords: Claude canary, Claude Code canary, Codex canary, context canar
 - Kanarya ölünce Claude'a not, Windows bildirimi ve ses (hepsi ayarlardan ayrı ayrı açılıp kapanır).
 - Claude Code ve Codex'te çalışır. Açık her oturumun kendi kanaryası olur; hepsi tek pencerede, 2x2 ızgarada durur. Her kanaryanın altında oturumun başlığı yazar.
 - **Kurulum:** `/plugin marketplace add IF-ies/Kanarya` → `/plugin install kanarya@kanarya` → `/kanarya:kur`, ya da `node install.js` (Claude Code + Codex; Codex'te bir kez `/hooks` ile onayla).
-- Sağ tık: ayarlar, yeni yumurta, kedi saldırısını izle. Arayüz Türkçe ve İngilizce.
+- Sağ tık: ayarlar, yeni yumurta, kedi saldırısını izle. Arayüz Türkçe ve İngilizce; koyu, açık ve şeffaf görünüm.
+- **Ne bu?** Bir Claude Code **eklentisi** (hook'lar + birkaç komut) ve kanaryayı çizen küçük bir masaüstü uygulaması. Skill değil, çünkü her mesajda Claude istese de istemese de çalışması gerekiyor. MCP de değil, çünkü Claude'a araç vermiyor, onu dışarıdan denetliyor.
+- **Platform:** Windows'ta test edildi. **macOS ve Linux henüz test edilmedi.**
 
 MIT License. All art is drawn in code and all sounds are synthesized, so there are no third-party assets.

@@ -18,6 +18,16 @@ const core = require('../lib/core');
 const W = 240; const H = 300; const MARGIN = 12; const MAX = 12;
 const ICON = path.join(__dirname, 'icon.png');
 const ICON_LIGHT = path.join(__dirname, 'icon-light.png');
+// Temaya göre simge: açık temada (ya da Windows açıkken 'Sistem') açık renkli logo.
+function iconForTheme() {
+  const light = settings.theme === 'light' || (settings.theme === 'system' && !require('electron').nativeTheme.shouldUseDarkColors);
+  return light ? ICON_LIGHT : ICON;
+}
+function refreshIcons() {
+  if (settingsWin) settingsWin.setIcon(iconForTheme());
+  if (win) win.setIcon(iconForTheme());
+  if (tray) makeTray();
+}
 const args = process.argv.slice(1);
 const snapshot = (args.find((a) => a.startsWith('--snapshot=')) || '').slice(11); // sahne:saniye:çıktı.png[:değişken[:adet]]
 const demo = args.includes('--demo');
@@ -134,7 +144,7 @@ function scan() {
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 460, height: 560, minWidth: 420, minHeight: 320, useContentSize: true, icon: ICON, resizable: true, minimizable: false, maximizable: true, autoHideMenuBar: true,
+    width: 460, height: 560, minWidth: 420, minHeight: 320, useContentSize: true, icon: iconForTheme(), resizable: true, minimizable: false, maximizable: true, autoHideMenuBar: true,
     title: settings.lang === 'en' ? 'Kanarya settings' : 'Kanarya ayarları', backgroundColor: '#141218',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -145,12 +155,11 @@ function openSettings() {
 
 // Bildirim alanı (Windows sağ alt / macOS menü çubuğu): tıkla göster-gizle, sağ tık menü.
 function makeTray() {
-  const light = settings.theme === 'light' || (settings.theme === 'system' && !nativeTheme.shouldUseDarkColors);
-  const img = nativeImage.createFromPath(light ? ICON_LIGHT : ICON).resize({ width: 16, height: 16, quality: 'best' });
+  const img = nativeImage.createFromPath(iconForTheme()).resize({ width: 16, height: 16, quality: 'best' });
   if (!tray) {
     tray = new Tray(img);
     tray.setToolTip('Kanarya');
-    nativeTheme.on('updated', () => { if (settings.theme === 'system') makeTray(); });
+    nativeTheme.on('updated', () => { if (settings.theme === 'system') refreshIcons(); });
     tray.on('click', () => tray.popUpContextMenu()); // tek tık: menü (en üstte Ayarlar)
     tray.on('double-click', openSettings);            // çift tık: doğrudan ayarlar
   }
@@ -208,6 +217,7 @@ ipcMain.handle('settings:save', (_e, partial) => {
   settings = core.saveSettings(partial);
   if (win) {
     if (prev.alwaysOnTop !== settings.alwaysOnTop) win.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
+    if (prev.theme !== settings.theme) refreshIcons();
     applyClickThrough();
     if (prev.scale !== settings.scale || prev.corner !== settings.corner) win.setBounds(placement());
   }
@@ -253,6 +263,22 @@ app.whenReady().then(() => {
   createWindow();
   if (snapshot) {
     const [scene, sec, out, variant, count] = snapshot.split(/:(?=[^\\/])/);
+    // Kare kare kayıt: --snapshot=sahne:başlangıç-bitiş-adım:klasör  → klasör/f000.png ...
+    if (String(sec).includes('-')) {
+      const [t0, t1, step] = String(sec).split('-').map(Number);
+      win.webContents.once('did-finish-load', async () => {
+        fs.mkdirSync(out, { recursive: true });
+        let i = 0;
+        for (let t = t0; t <= t1 + 1e-9; t += step) {
+          await win.webContents.executeJavaScript(`window.kanaryaFreeze(${JSON.stringify(scene)}, ${t}, ${JSON.stringify(settings.lang)}, ${Number(variant) || 0}, ${Number(count) || 1}, ${JSON.stringify(settings.theme)}, ${!!settings.transparent}, ${Number(settings.backdrop ?? 40)})`);
+          await new Promise((r) => setTimeout(r, 60));
+          const img = await win.webContents.capturePage();
+          fs.writeFileSync(path.join(out, `f${String(i++).padStart(3, '0')}.png`), img.resize({ width: W, height: H, quality: 'best' }).toPNG());
+        }
+        app.quit();
+      });
+      return;
+    }
     win.webContents.once('did-finish-load', async () => {
       await win.webContents.executeJavaScript(`window.kanaryaFreeze(${JSON.stringify(scene)}, ${Number(sec) || 0}, ${JSON.stringify(settings.lang)}, ${Number(variant) || 0}, ${Number(count) || 1}, ${JSON.stringify(settings.theme)}, ${!!settings.transparent}, ${Number(settings.backdrop ?? 40)})`);
       await new Promise((r) => setTimeout(r, 300));

@@ -1026,6 +1026,9 @@ if (window.kanarya) {
 
 // Anlık görüntü / test: window.kanaryaFreeze('death', 2.5, 'tr', değişken, kafesSayısı)
 window.kanaryaFreeze = (what, sec, lang, variant = 0, count = 1, theme = 'dark', transparent = false, backdrop = 40) => {
+  // Sabit tohumlu rastgelelik: aynı an her seferinde aynı çizilsin (kare kare kayıtta titreme olmasın).
+  let rs = 20261121;
+  Math.random = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
   const states = {
     happy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.2 },
     sleepy: { mood: 'happy', lives: 3, status: 'alive', contextPct: 0.85 },

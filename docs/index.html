@@ -33,7 +33,7 @@
   "alternateName": ["Claude Canary", "Claude Code Context Canary", "Codex Canary"],
   "description": "Open-source context canary for Claude Code. Detects context loss and hallucination with a secret-word check and shows the result as an animated canary on your desktop.",
   "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "Windows, macOS, Linux",
+  "operatingSystem": "Windows (macOS and Linux untested)",
   "softwareRequirements": "Claude Code, Node.js 18+",
   "license": "https://opensource.org/licenses/MIT",
   "url": "https://if-ies.github.io/Kanarya/",
@@ -101,6 +101,7 @@
     </div>
   </header>
 
+  <p style="text-align:center;margin:30px 0 0"><img src="kedi-saldirisi.png" width="240" height="300" alt="Animated: a cat sneaks up, pounces and eats the canary when Claude hallucinates" style="border-radius:16px"></p>
   <section class="shots" aria-label="Screenshots">
     <figure><img src="mutlu.png" width="300" height="375" alt="Claude canary alive and singing in its cage"><figcaption>Context healthy</figcaption></figure>
     <figure><img src="hasta.png" width="300" height="375" alt="Sick canary with cat eyes glowing in the dark"><figcaption>"I don't know": sick</figcaption></figure>
@@ -109,7 +110,7 @@
   </section>
 
   <h2 id="sessions">One window, every session</h2>
-  <p><img src="izgara.png" width="300" height="375" alt="Four canaries in a 2x2 grid, one per Claude Code or Codex session, each labelled with the session title" style="float:right;width:240px;height:auto;margin:0 0 12px 18px;border-radius:16px">Run several Claude Code or Codex sessions at once and each one gets its own canary in its own color, all in one small always-on-top window. Two to four sessions share a 2×2 grid. Every canary is labelled with the session title, so you know at a glance which conversation is drifting. A new session hatches from an egg; a closed one leaves.</p>
+  <p><img src="izgara4.png" width="300" height="375" alt="Four canaries in a 2x2 grid, one per Claude Code or Codex session, each labelled with the session title" style="float:right;width:240px;height:auto;margin:0 0 12px 18px;border-radius:16px">Run several Claude Code or Codex sessions at once and each one gets its own canary in its own color, all in one small always-on-top window. Two to four sessions share a 2×2 grid. Every canary is labelled with the session title, so you know at a glance which conversation is drifting. A new session hatches from an egg; a closed one leaves.</p>
   <div style="clear:both"></div>
 
   <h2>Why a canary for Claude?</h2>
@@ -136,7 +137,17 @@
   <pre><code>git clone https://github.com/IF-ies/Kanarya && cd Kanarya
 node install.js</code></pre>
 
+  <h2>Looks</h2>
+  <section class="shots" aria-label="Themes">
+    <figure><img src="izgara4.png" width="300" height="375" alt="Four canaries for Claude Code, Claude App and Codex sessions"><figcaption>Dark, 4 sessions</figcaption></figure>
+    <figure><img src="acik.png" width="300" height="375" alt="Light theme"><figcaption>Light theme</figcaption></figure>
+    <figure><img src="seffaf.png" width="300" height="375" alt="Transparent background"><figcaption>Transparent</figcaption></figure>
+    <figure><img src="ayarlar.png" width="300" height="375" alt="Settings window" style="object-fit:cover;object-position:top"><figcaption>Settings</figcaption></figure>
+  </section>
+
   <h2>FAQ</h2>
+  <p><strong>Is it a skill or an MCP server?</strong> Neither. It is a Claude Code plugin made of hooks plus a small desktop app. Hooks run on every message no matter what Claude decides; a skill would be optional and an MCP server would only give Claude tools.</p>
+  <p><strong>Does it run on macOS or Linux?</strong> It is built only from cross-platform parts (Node, Electron), but so far it has only been tested on Windows. macOS and Linux are <strong>not tested yet</strong>.</p>
   <p><strong>What is a Claude canary?</strong> A secret word given to Claude early and checked later. If Claude cannot recall it, or invents another, its context has degraded.</p>
   <p><strong>Does it cost API calls?</strong> No. It only uses hooks, and each check adds a few tokens.</p>
   <p><strong>Does it work with OpenAI Codex?</strong> Yes. <code>node install.js</code> adds the same hooks to <code>~/.codex/hooks.json</code>; trust them once with <code>/hooks</code> in Codex.</p>
