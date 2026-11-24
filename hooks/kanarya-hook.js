@@ -122,10 +122,12 @@ function onSessionStart(input, settings) {
     // Kelime transcript'te duruyor; aynı kanarya devam eder.
     if (prev.status === 'dead' && prev.noteForClaude) out.push(t.note(prev.name, prev.deathCause));
     prev.noteForClaude = false;
+    prev.agentPid = core.findAgentPid(); // devam eden oturum yeni bir süreçte
     core.saveSession(prev);
   } else {
     // Yeni oturum, /clear ya da /compact: kafese yumurta gelir.
     const state = core.newCanary(id, settings, prev, { cwd: input.cwd, agent: AGENT });
+    state.agentPid = (prev && source !== 'startup' && prev.agentPid) || core.findAgentPid();
     core.saveSession(state);
     out.push(prev && source === 'compact' ? t.renew(state.word) : t.intro(state.word));
   }
@@ -152,6 +154,7 @@ function onPrompt(input, settings) {
     state = core.newCanary(id, settings, state, { cwd: input.cwd, agent: AGENT });
     out.push(t.renew(state.word));
   }
+  if (state.agentPid === undefined) state.agentPid = core.findAgentPid(); // eklentiden önce açılmış oturum
   if (!state.firstPrompt && input.prompt) state.firstPrompt = String(input.prompt).replace(/\s+/g, ' ').trim().slice(0, 60);
   state.prompts += 1;
   state.ended = false;
