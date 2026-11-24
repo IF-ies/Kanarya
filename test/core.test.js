@@ -150,3 +150,23 @@ test('Codex rollout transcript: bağlam penceresi token_count olayından', () =>
   const p = core.parseTranscript(tp);
   assert.strictEqual(p.tokens, 64000); assert.strictEqual(p.window, 256000);
 });
+
+test('resume farklı session_id ile gelirse aynı kanarya devam eder (kelime değişmez, ikinci kafes yok)', () => {
+  core.saveSettings({ autoStart: false, checkEvery: 4, lang: 'tr' });
+  const eski = 'resume-eski';
+  const yeni = 'resume-yeni';
+  const tp = path.join(HOME, `${eski}.jsonl`);
+  hook('session-start', { session_id: eski, source: 'startup', transcript_path: tp });
+  const word = core.loadSession(eski).word;
+  const c = hook('session-start', { session_id: yeni, source: 'resume', transcript_path: tp });
+  assert.ok(!c.includes('Kanarya testi') && !/doğdu/.test(c), 'resume yeni kelime vermez');
+  assert.strictEqual(core.loadSession(yeni), null, 'yeni kimlikle hayalet kanarya açılmaz');
+  for (let i = 1; i <= 3; i++) hook('prompt', { session_id: yeni, prompt: `r${i}`, transcript_path: tp });
+  const c4 = hook('prompt', { session_id: yeni, prompt: 'r4', transcript_path: tp });
+  assert.ok(/kontrol/i.test(c4) && !c4.includes('Kanarya testi'), 'eski kanarya üzerinden kontrol');
+  transcript(tp, 'r4', `<kanarya>${word}</kanarya>`);
+  hook('stop', { session_id: yeni, transcript_path: tp });
+  const st = core.loadSession(eski);
+  assert.strictEqual(st.word, word); assert.strictEqual(st.lastGrade, 'exact'); assert.strictEqual(st.prompts, 4);
+  assert.strictEqual(core.loadSession(yeni), null);
+});

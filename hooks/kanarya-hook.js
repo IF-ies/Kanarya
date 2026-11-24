@@ -111,10 +111,25 @@ function install() {
 }
 
 // ---------- hook olayları ----------
+// Devam ettirilen oturumda (resume) Claude Code olayları farklı session_id ile gönderebiliyor;
+// transcript dosyası ise eski kimlikle sürüyor. Kimlikle kayıt yoksa transcript adındaki kimliğe bak,
+// bulunan kanarya kendi dosyasında (state.sessionId) yaşamaya devam eder → kelime değişmez, ikinci kafes açılmaz.
+function transcriptId(input) {
+  if (!input.transcript_path) return null;
+  const base = path.basename(String(input.transcript_path)).replace(/\.jsonl$/i, '');
+  return base && base !== input.session_id ? base : null;
+}
+function loadState(input) {
+  const own = core.loadSession(input.session_id);
+  if (own) return own;
+  const tid = transcriptId(input);
+  return tid ? core.loadSession(tid) : null;
+}
+
 function onSessionStart(input, settings) {
   const id = input.session_id;
-  const prev = core.loadSession(id);
   const source = input.source || 'startup';
+  const prev = source === 'resume' || source === 'fork' ? loadState(input) : core.loadSession(id);
   const t = T[settings.lang];
   const out = [];
   if (prev && (source === 'resume' || source === 'fork')) {
@@ -139,7 +154,7 @@ function onPrompt(input, settings) {
   const id = input.session_id;
   const t = T[settings.lang];
   const out = [];
-  let state = core.loadSession(id);
+  let state = loadState(input);
   if (!state) {
     // Eklenti oturum ortasında kuruldu.
     state = core.newCanary(id, settings, null, { cwd: input.cwd, agent: AGENT });
@@ -167,7 +182,7 @@ function onPrompt(input, settings) {
 }
 
 function onStop(input, settings) {
-  const state = core.loadSession(input.session_id);
+  const state = loadState(input);
   if (!state) return;
   let parsed = input.transcript_path ? core.parseTranscript(input.transcript_path) : { text: '', tokens: null };
   if (parsed.tokens) {
@@ -195,7 +210,7 @@ function onStop(input, settings) {
 }
 
 function onSessionEnd(input) {
-  const state = core.loadSession(input.session_id);
+  const state = loadState(input);
   if (!state) return;
   state.ended = true; // pencere bu kanaryayı kaldırır
   core.saveSession(state);
